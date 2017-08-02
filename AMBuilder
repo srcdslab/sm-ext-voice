@@ -1,0 +1,27 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+if not "SM" in globals():
+	SM = Extension
+
+projectName = 'Voice'
+
+project = SM.HL2Project(builder, projectName + '.ext')
+project.sources += [
+  'extension.cpp',
+  'ringbuffer.cpp',
+  '../../public/smsdk_ext.cpp'
+]
+
+for sdk_name in SM.sdks:
+  sdk = SM.sdks[sdk_name]
+  binary = SM.HL2Config(project, projectName + '.ext', sdk)
+  binary.compiler.cxxincludes += [
+    os.path.join(SM.sm_root, 'public', 'extensions'),
+    os.path.join(builder.sourcePath, 'silk')
+  ]
+  binary.compiler.linkflags += [
+    os.path.join(builder.sourcePath, 'silk', 'libSKP_SILK_SDK.a')
+  ]
+
+SM.extensions += builder.Add(project)

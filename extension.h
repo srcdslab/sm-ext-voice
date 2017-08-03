@@ -33,7 +33,7 @@
 #define _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_
 
 #include "smsdk_ext.h"
-#include <SKP_Silk_SDK_API.h>
+#include "celt_header.h"
 #include "ringbuffer.h"
 
 /**
@@ -157,19 +157,16 @@ private:
 
 	struct CEncoderSettings
 	{
-		SKP_int InputSampleRate_kHz;
-		SKP_int OutputSampleRate_kHz;
-		SKP_int TargetBitRate_Kbps;
-		SKP_int PacketSize_ms;
-		SKP_int FrameSize_ms;
-		SKP_int PacketLoss_perc;
-		SKP_int Complexity;
-		SKP_int InBandFEC;
-		SKP_int DTX;
+		celt_int32 SampleRate_Hz;
+		celt_int32 TargetBitRate_Kbps;
+		celt_int32 FrameSize;
+		celt_int32 PacketSize;
+		celt_int32 Complexity;
+		double FrameTime;
 	} m_EncoderSettings;
 
-	void *m_Silk_EncoderState;
-	SKP_SILK_SDK_EncControlStruct m_Silk_EncoderControl;
+	CELTMode *m_pMode;
+	CELTEncoder *m_pCodec;
 
 	t_SV_BroadcastVoiceData m_SV_BroadcastVoiceData;
 

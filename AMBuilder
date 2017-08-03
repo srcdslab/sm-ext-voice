@@ -18,10 +18,10 @@ for sdk_name in SM.sdks:
   binary = SM.HL2Config(project, projectName + '.ext', sdk)
   binary.compiler.cxxincludes += [
     os.path.join(SM.sm_root, 'public', 'extensions'),
-    os.path.join(builder.sourcePath, 'silk')
+    os.path.join(builder.sourcePath, 'celt')
   ]
   binary.compiler.linkflags += [
-    os.path.join(builder.sourcePath, 'silk', 'libSKP_SILK_SDK.a')
+    os.path.join(builder.sourcePath, 'celt', 'libcelt0.a')
   ]
 
 SM.extensions += builder.Add(project)

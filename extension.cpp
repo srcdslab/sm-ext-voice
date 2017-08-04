@@ -45,9 +45,8 @@
 
 #include "extension.h"
 
-#define LISTEN_ADDR "127.0.0.1"
-//#define LISTEN_ADDR "10.0.0.101"
-#define LISTEN_PORT 27020
+ConVar g_SmVoiceAddr("sm_voice_addr", "127.0.0.1", FCVAR_PROTECTED, "Voice server listen ip address.");
+ConVar g_SmVoicePort("sm_voice_port", "27020", FCVAR_PROTECTED, "Voice server listen port.", true, 1025.0, true, 65535.0);
 
 /**
  * @file extension.cpp
@@ -266,13 +265,17 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	engine->ServerCommand("exec sourcemod/extension.Voice.cfg\n");
+	engine->ServerExecute();
+
 	sockaddr_in bindAddr;
 	memset(&bindAddr, 0, sizeof(bindAddr));
 	bindAddr.sin_family = AF_INET;
-	inet_aton(LISTEN_ADDR, &bindAddr.sin_addr);
-	bindAddr.sin_port = htons(LISTEN_PORT);
+	inet_aton(g_SmVoiceAddr.GetString(), &bindAddr.sin_addr);
+	bindAddr.sin_port = htons(g_SmVoicePort.GetInt());
 
-	// Listen on LISTEN_ADDR:LISTEN_PORT
+	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr.GetString(), g_SmVoicePort.GetInt());
+
 	if(bind(m_ListenSocket, (sockaddr *)&bindAddr, sizeof(sockaddr_in)) < 0)
 	{
 		g_SMAPI->Format(error, maxlength, "Failed binding to socket (%d '%s').", errno, strerror(errno));
@@ -334,6 +337,20 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	smutils->AddGameFrameHook(::OnGameFrame);
 
 	return true;
+}
+
+bool CVoice::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
+{
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
+	ConVar_Register(0, this);
+
+	return true;
+}
+
+bool CVoice::RegisterConCommandBase(ConCommandBase *pVar)
+{
+	/* Always call META_REGCVAR instead of going through the engine. */
+	return META_REGCVAR(pVar);
 }
 
 void CVoice::SDK_OnAllLoaded()

@@ -56,7 +56,9 @@ typedef void (*t_SV_BroadcastVoiceData)(IClient *, int, unsigned char *, int64);
  * @brief Sample implementation of the SDK Extension.
  * Note: Uncomment one of the pre-defined virtual functions in order to use it.
  */
-class CVoice : public SDKExtension
+class CVoice :
+	public SDKExtension,
+	public IConCommandBaseAccessor
 {
 public:
 	/**
@@ -103,7 +105,7 @@ public:
 	 * @param late			Whether or not Metamod considers this a late load.
 	 * @return				True to succeed, false to fail.
 	 */
-	//virtual bool SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlength, bool late);
+	virtual bool SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlength, bool late);
 
 	/**
 	 * @brief Called when Metamod is detaching, after the extension version is called.
@@ -126,6 +128,9 @@ public:
 	 */
 	//virtual bool SDK_OnMetamodPauseChange(bool paused, char *error, size_t maxlength);
 #endif
+
+public:  // IConCommandBaseAccessor
+	virtual bool RegisterConCommandBase(ConCommandBase *pVar);
 
 public:
 	CVoice();

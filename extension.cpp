@@ -59,6 +59,7 @@ CVoice g_Interface;
 SMEXT_LINK(&g_Interface);
 
 ISDKTools *g_pSDKTools = NULL;
+IServer *iserver = NULL;
 SH_DECL_MANUALHOOK0(GetPlayerSlot, 0, 0, 0, int); // IClient::GetPlayerSlot
 
 double getTime()
@@ -286,6 +287,10 @@ void CVoice::SDK_OnAllLoaded()
 	SM_GET_LATE_IFACE(SDKTOOLS, g_pSDKTools);
 	if(g_pSDKTools == NULL)
 		smutils->LogError(myself, "SDKTools interface not found");
+
+	iserver = g_pSDKTools->GetIServer();
+	if(iserver == NULL)
+		smutils->LogError(myself, "Failed to get IServer interface from SDKTools!");
 }
 
 void CVoice::SDK_OnUnload()
@@ -500,7 +505,7 @@ void CVoice::HandleVoiceData()
 	FramesAvailable = min(FramesAvailable, 5);
 
 	// 0 = SourceTV
-	IClient *pClient = g_pSDKTools->GetIServer()->GetClient(0);
+	IClient *pClient = iserver->GetClient(0);
 	if(!pClient)
 		return;
 

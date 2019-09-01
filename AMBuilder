@@ -10,7 +10,9 @@ project = SM.HL2Project(builder, projectName + '.ext')
 project.sources += [
   'extension.cpp',
   'ringbuffer.cpp',
-  '../../public/smsdk_ext.cpp'
+  '../../public/smsdk_ext.cpp',
+  '../../public/CDetour/detours.cpp',
+  '../../public/asm/asm.c',
 ]
 
 for sdk_name in SM.sdks:

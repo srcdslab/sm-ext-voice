@@ -43,6 +43,7 @@
 #include <iserver.h>
 #include <ISDKTools.h>
 
+#include "CDetour/detours.h"
 #include "extension.h"
 
 ConVar g_SmVoiceAddr("sm_voice_addr", "127.0.0.1", FCVAR_PROTECTED, "Voice server listen ip address.");
@@ -58,9 +59,36 @@ template <typename T> inline T min(T a, T b) { return a<b?a:b; }
 CVoice g_Interface;
 SMEXT_LINK(&g_Interface);
 
+CGlobalVars *gpGlobals = NULL;
 ISDKTools *g_pSDKTools = NULL;
 IServer *iserver = NULL;
-SH_DECL_MANUALHOOK0(GetPlayerSlot, 0, 0, 0, int); // IClient::GetPlayerSlot
+
+double g_fLastVoiceData[SM_MAXPLAYERS + 1];
+
+DETOUR_DECL_STATIC4(SV_BroadcastVoiceData, void, IClient *, pClient, int, nBytes, char *, data, int64, xuid)
+{
+	g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
+
+	DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, data, xuid);
+}
+
+#ifdef _WIN32
+DETOUR_DECL_STATIC2(SV_BroadcastVoiceData_LTCG, void, char *, data, int64, xuid)
+{
+	IClient *pClient = NULL;
+	int nBytes = 0;
+
+	__asm mov pClient, ecx;
+	__asm mov nBytes, edx;
+
+	g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
+
+	__asm mov ecx, pClient;
+	__asm mov edx, nBytes;
+
+	DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
+}
+#endif
 
 double getTime()
 {
@@ -92,6 +120,7 @@ CVoice::CVoice()
 	m_pMode = NULL;
 	m_pCodec = NULL;
 
+	m_VoiceDetour = NULL;
 	m_SV_BroadcastVoiceData = NULL;
 }
 
@@ -114,47 +143,39 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	int engineVersion = g_SMAPI->GetSourceEngineBuild();
-	int offsPlayerSlot = 0;
+	void *adrVoiceData = NULL;
 
 	switch (engineVersion)
 	{
 		case SOURCE_ENGINE_CSGO:
 #ifdef _WIN32
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x81\xEC\xD0\x00\x00\x00\x53\x56\x57", 12);
-			offsPlayerSlot = 15;
+			adrVoiceData = memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x81\xEC\xD0\x00\x00\x00\x53\x56\x57", 12);
 #else
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
-			offsPlayerSlot = 16;
+			adrVoiceData = memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
 #endif
 			break;
 
 		case SOURCE_ENGINE_LEFT4DEAD2:
 #ifdef _WIN32
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x83\xEC\x70\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\xA1\x2A\x2A\x2A\x2A\x53\x56", 23);
-			offsPlayerSlot = 14;
+			adrVoiceData = memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x83\xEC\x70\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\xA1\x2A\x2A\x2A\x2A\x53\x56", 23);
 #else
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
-			offsPlayerSlot = 15;
+			adrVoiceData = memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
 #endif
 			break;
 
 		case SOURCE_ENGINE_NUCLEARDAWN:
 #ifdef _WIN32
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x58\x57\x33\xFF", 14);
-			offsPlayerSlot = 14;
+			adrVoiceData = memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x58\x57\x33\xFF", 14);
 #else
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
-			offsPlayerSlot = 15;
+			adrVoiceData = memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
 #endif
 			break;
 
 		case SOURCE_ENGINE_INSURGENCY:
 #ifdef _WIN32
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x83\xEC\x74\x68\x2A\x2A\x2A\x2A\x8D\x4D\xE4\xE8", 15);
-			offsPlayerSlot = 14;
+			adrVoiceData = memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\x83\xEC\x74\x68\x2A\x2A\x2A\x2A\x8D\x4D\xE4\xE8", 15);
 #else
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
-			offsPlayerSlot = 15;
+			adrVoiceData = memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
 #endif
 			break;
 
@@ -164,11 +185,9 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		case SOURCE_ENGINE_DODS:
 		case SOURCE_ENGINE_SDK2013:
 #ifdef _WIN32
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x50\x83\x78\x30", 14);
-			offsPlayerSlot = 14;
+			adrVoiceData = memutils->FindPattern(pEngineSo, "\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x50\x83\x78\x30", 14);
 #else
-			m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
-			offsPlayerSlot = 15;
+			adrVoiceData = memutils->ResolveSymbol(pEngineSo, "_Z21SV_BroadcastVoiceDataP7IClientiPcx");
 #endif
 			break;
 
@@ -179,13 +198,36 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	dlclose(pEngineSo);
 
+	m_SV_BroadcastVoiceData = (t_SV_BroadcastVoiceData)adrVoiceData;
 	if(!m_SV_BroadcastVoiceData)
 	{
 		g_SMAPI->Format(error, maxlength, "SV_BroadcastVoiceData sigscan failed.");
 		return false;
 	}
 
-	SH_MANUALHOOK_RECONFIGURE(GetPlayerSlot, offsPlayerSlot, 0, 0);
+	// Setup voice detour.
+	CDetourManager::Init(g_pSM->GetScriptingEngine(), NULL);
+
+#ifdef _WIN32
+	if (engineVersion == SOURCE_ENGINE_CSGO || engineVersion == SOURCE_ENGINE_INSURGENCY)
+	{
+		m_VoiceDetour = DETOUR_CREATE_STATIC(SV_BroadcastVoiceData_LTCG, adrVoiceData);
+	}
+	else
+	{
+		m_VoiceDetour = DETOUR_CREATE_STATIC(SV_BroadcastVoiceData, adrVoiceData);
+	}
+#else
+	m_VoiceDetour = DETOUR_CREATE_STATIC(SV_BroadcastVoiceData, adrVoiceData);
+#endif
+
+	if (!m_VoiceDetour)
+	{
+		g_SMAPI->Format(error, maxlength, "SV_BroadcastVoiceData detour failed.");
+		return false;
+	}
+
+	m_VoiceDetour->EnableDetour();
 
 	// Init tcp server
 	m_ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -271,6 +313,7 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 bool CVoice::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
+	gpGlobals = ismm->GetCGlobals();
 	ConVar_Register(0, this);
 
 	return true;
@@ -282,8 +325,37 @@ bool CVoice::RegisterConCommandBase(ConCommandBase *pVar)
 	return META_REGCVAR(pVar);
 }
 
+cell_t IsClientTalking(IPluginContext *pContext, const cell_t *params)
+{
+	int client = params[1];
+
+	if(client < 1 || client > SM_MAXPLAYERS)
+	{
+		return pContext->ThrowNativeError("Client index %d is invalid", client);
+	}
+
+	double d = gpGlobals->curtime - g_fLastVoiceData[client];
+
+	if(d < 0) // mapchange
+		return false;
+
+	if(d > 0.33)
+		return false;
+
+	return true;
+}
+
+const sp_nativeinfo_t MyNatives[] =
+{
+	{ "IsClientTalking", IsClientTalking },
+	{ NULL, NULL }
+};
+
 void CVoice::SDK_OnAllLoaded()
 {
+	sharesys->AddNatives(myself, MyNatives);
+	sharesys->RegisterLibrary(myself, "Voice");
+
 	SM_GET_LATE_IFACE(SDKTOOLS, g_pSDKTools);
 	if(g_pSDKTools == NULL)
 		smutils->LogError(myself, "SDKTools interface not found");
@@ -296,6 +368,12 @@ void CVoice::SDK_OnAllLoaded()
 void CVoice::SDK_OnUnload()
 {
 	smutils->RemoveGameFrameHook(::OnGameFrame);
+
+	if(m_VoiceDetour)
+	{
+		m_VoiceDetour->Destroy();
+		m_VoiceDetour = NULL;
+	}
 
 	if(m_ListenSocket != -1)
 	{
@@ -323,6 +401,13 @@ void CVoice::OnGameFrame(bool simulating)
 {
 	HandleNetwork();
 	HandleVoiceData();
+}
+
+void CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
+{
+	int client = pClient->GetPlayerSlot() + 1;
+
+	g_fLastVoiceData[client] = gpGlobals->curtime;
 }
 
 void CVoice::HandleNetwork()
@@ -553,7 +638,7 @@ void CVoice::HandleVoiceData()
 			}
 		}
 
-		SV_BroadcastVoiceData(pClient, FinalSize, aFinal);
+		BroadcastVoiceData(pClient, FinalSize, aFinal);
 	}
 
 	if(m_AvailableTime < getTime())
@@ -562,7 +647,14 @@ void CVoice::HandleVoiceData()
 	m_AvailableTime += (double)FramesAvailable * m_EncoderSettings.FrameTime;
 }
 
-void CVoice::SV_BroadcastVoiceData(IClient *pClient, int nBytes, unsigned char *pData)
+void CVoice::BroadcastVoiceData(IClient *pClient, int nBytes, unsigned char *pData)
 {
-	m_SV_BroadcastVoiceData(pClient, nBytes, pData, 0);
+	#ifdef _WIN32
+	__asm mov ecx, pClient;
+	__asm mov edx, nBytes;
+
+	DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
+	#else
+	DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
+	#endif
 }

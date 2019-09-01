@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Voice"
 #define SMEXT_CONF_DESCRIPTION	"Inject voice data over existing clients"
-#define SMEXT_CONF_VERSION		"1.0"
+#define SMEXT_CONF_VERSION		"1.1"
 #define SMEXT_CONF_AUTHOR		"BotoX"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"VOICE"
@@ -61,7 +61,7 @@
 /** Enable interfaces you want to use here by uncommenting lines */
 //#define SMEXT_ENABLE_FORWARDSYS
 //#define SMEXT_ENABLE_HANDLESYS
-//#define SMEXT_ENABLE_PLAYERHELPERS
+#define SMEXT_ENABLE_PLAYERHELPERS
 //#define SMEXT_ENABLE_DBMANAGER
 #define SMEXT_ENABLE_GAMECONF
 #define SMEXT_ENABLE_MEMUTILS

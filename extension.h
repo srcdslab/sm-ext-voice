@@ -32,6 +32,7 @@
 #ifndef _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_
 #define _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_
 
+#include <poll.h>
 #include "smsdk_ext.h"
 #include "celt_header.h"
 #include "ringbuffer.h"
@@ -49,6 +50,7 @@ typedef __int64		int64;
 typedef long long	int64;
 #endif
 
+class CDetour;
 class IClient;
 typedef void (*t_SV_BroadcastVoiceData)(IClient *, int, unsigned char *, int64);
 
@@ -135,6 +137,7 @@ public:  // IConCommandBaseAccessor
 public:
 	CVoice();
 	void OnGameFrame(bool simulating);
+	void OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data);
 
 private:
 	int m_ListenSocket;
@@ -169,11 +172,12 @@ private:
 	CELTEncoder *m_pCodec;
 
 	t_SV_BroadcastVoiceData m_SV_BroadcastVoiceData;
+	CDetour *m_VoiceDetour;
 
 	void HandleNetwork();
 	void OnDataReceived(CClient *pClient, int16_t *pData, size_t Samples);
 	void HandleVoiceData();
-	void SV_BroadcastVoiceData(IClient *pClient, int nBytes, unsigned char *pData);
+	void BroadcastVoiceData(IClient *pClient, int nBytes, unsigned char *pData);
 };
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_

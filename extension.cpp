@@ -229,52 +229,6 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	m_VoiceDetour->EnableDetour();
 
-	// Init tcp server
-	m_ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(m_ListenSocket < 0)
-	{
-		g_SMAPI->Format(error, maxlength, "Failed creating socket.");
-		SDK_OnUnload();
-		return false;
-	}
-
-	int yes = 1;
-	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
-	{
-		g_SMAPI->Format(error, maxlength, "Failed setting SO_REUSEADDR on socket.");
-		SDK_OnUnload();
-		return false;
-	}
-
-	engine->ServerCommand("exec sourcemod/extension.Voice.cfg\n");
-	engine->ServerExecute();
-
-	sockaddr_in bindAddr;
-	memset(&bindAddr, 0, sizeof(bindAddr));
-	bindAddr.sin_family = AF_INET;
-	inet_aton(g_SmVoiceAddr.GetString(), &bindAddr.sin_addr);
-	bindAddr.sin_port = htons(g_SmVoicePort.GetInt());
-
-	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr.GetString(), g_SmVoicePort.GetInt());
-
-	if(bind(m_ListenSocket, (sockaddr *)&bindAddr, sizeof(sockaddr_in)) < 0)
-	{
-		g_SMAPI->Format(error, maxlength, "Failed binding to socket (%d '%s').", errno, strerror(errno));
-		SDK_OnUnload();
-		return false;
-	}
-
-	if(listen(m_ListenSocket, MAX_CLIENTS) < 0)
-	{
-		g_SMAPI->Format(error, maxlength, "Failed listening on socket.");
-		SDK_OnUnload();
-		return false;
-	}
-
-	m_aPollFds[0].fd = m_ListenSocket;
-	m_aPollFds[0].events = POLLIN;
-	m_PollFds++;
-
 	// Encoder settings
 	m_EncoderSettings.SampleRate_Hz = 22050;
 	m_EncoderSettings.TargetBitRate_Kbps = 64;
@@ -304,8 +258,6 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	celt_encoder_ctl(m_pCodec, CELT_RESET_STATE_REQUEST, NULL);
 	celt_encoder_ctl(m_pCodec, CELT_SET_BITRATE(m_EncoderSettings.TargetBitRate_Kbps * 1000));
 	celt_encoder_ctl(m_pCodec, CELT_SET_COMPLEXITY(m_EncoderSettings.Complexity));
-
-	smutils->AddGameFrameHook(::OnGameFrame);
 
 	return true;
 }
@@ -358,11 +310,67 @@ void CVoice::SDK_OnAllLoaded()
 
 	SM_GET_LATE_IFACE(SDKTOOLS, g_pSDKTools);
 	if(g_pSDKTools == NULL)
+	{
 		smutils->LogError(myself, "SDKTools interface not found");
+		SDK_OnUnload();
+		return;
+	}
 
 	iserver = g_pSDKTools->GetIServer();
 	if(iserver == NULL)
+	{
 		smutils->LogError(myself, "Failed to get IServer interface from SDKTools!");
+		SDK_OnUnload();
+		return;
+	}
+
+	// Init tcp server
+	m_ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if(m_ListenSocket < 0)
+	{
+		smutils->LogError(myself, "Failed creating socket.");
+		SDK_OnUnload();
+		return;
+	}
+
+	int yes = 1;
+	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
+	{
+		smutils->LogError(myself, "Failed setting SO_REUSEADDR on socket.");
+		SDK_OnUnload();
+		return;
+	}
+
+	engine->ServerCommand("exec sourcemod/extension.Voice.cfg\n");
+	engine->ServerExecute();
+
+	sockaddr_in bindAddr;
+	memset(&bindAddr, 0, sizeof(bindAddr));
+	bindAddr.sin_family = AF_INET;
+	inet_aton(g_SmVoiceAddr.GetString(), &bindAddr.sin_addr);
+	bindAddr.sin_port = htons(g_SmVoicePort.GetInt());
+
+	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr.GetString(), g_SmVoicePort.GetInt());
+
+	if(bind(m_ListenSocket, (sockaddr *)&bindAddr, sizeof(sockaddr_in)) < 0)
+	{
+		smutils->LogError(myself, "Failed binding to socket (%d '%s').", errno, strerror(errno));
+		SDK_OnUnload();
+		return;
+	}
+
+	if(listen(m_ListenSocket, MAX_CLIENTS) < 0)
+	{
+		smutils->LogError(myself, "Failed listening on socket.");
+		SDK_OnUnload();
+		return;
+	}
+
+	m_aPollFds[0].fd = m_ListenSocket;
+	m_aPollFds[0].events = POLLIN;
+	m_PollFds++;
+
+	smutils->AddGameFrameHook(::OnGameFrame);
 }
 
 void CVoice::SDK_OnUnload()

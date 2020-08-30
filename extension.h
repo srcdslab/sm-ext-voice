@@ -137,7 +137,7 @@ public:  // IConCommandBaseAccessor
 public:
 	CVoice();
 	void OnGameFrame(bool simulating);
-	void OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data);
+	bool OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data);
 
 private:
 	int m_ListenSocket;

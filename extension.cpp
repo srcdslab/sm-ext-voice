@@ -46,6 +46,14 @@
 #include "CDetour/detours.h"
 #include "extension.h"
 
+// voice packets are sent over unreliable netchannel
+//#define NET_MAX_DATAGRAM_PAYLOAD	4000	// = maximum unreliable payload size
+// voice packetsize = 64 | netchannel overflows at >4000 bytes
+// with 22050 samplerate and 512 frames per packet -> 23.22ms per packet
+// SVC_VoiceData overhead = 5 bytes
+// sensible limit of 8 packets per frame = 552 bytes -> 185.76ms of voice data per frame
+#define NET_MAX_VOICE_BYTES_FRAME (8 * (5 + 64))
+
 ConVar g_SmVoiceAddr("sm_voice_addr", "127.0.0.1", FCVAR_PROTECTED, "Voice server listen ip address.");
 ConVar g_SmVoicePort("sm_voice_port", "27020", FCVAR_PROTECTED, "Voice server listen port.", true, 1025.0, true, 65535.0);
 
@@ -64,12 +72,12 @@ ISDKTools *g_pSDKTools = NULL;
 IServer *iserver = NULL;
 
 double g_fLastVoiceData[SM_MAXPLAYERS + 1];
+int g_aFrameVoiceBytes[SM_MAXPLAYERS + 1];
 
 DETOUR_DECL_STATIC4(SV_BroadcastVoiceData, void, IClient *, pClient, int, nBytes, char *, data, int64, xuid)
 {
-	g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
-
-	DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, data, xuid);
+	if(g_Interface.OnBroadcastVoiceData(pClient, nBytes, data))
+		DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, data, xuid);
 }
 
 #ifdef _WIN32
@@ -81,12 +89,13 @@ DETOUR_DECL_STATIC2(SV_BroadcastVoiceData_LTCG, void, char *, data, int64, xuid)
 	__asm mov pClient, ecx;
 	__asm mov nBytes, edx;
 
-	g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
+	bool ret = g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
 
 	__asm mov ecx, pClient;
 	__asm mov edx, nBytes;
 
-	DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
+	if(ret)
+		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
 }
 #endif
 
@@ -409,13 +418,29 @@ void CVoice::OnGameFrame(bool simulating)
 {
 	HandleNetwork();
 	HandleVoiceData();
+
+	// Reset per-client voice byte counter to 0 every frame.
+	memset(g_aFrameVoiceBytes, 0, sizeof(g_aFrameVoiceBytes));
 }
 
-void CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
+bool CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
 {
+	// Reject empty packets
+	if(nBytes < 1)
+		return false;
+
 	int client = pClient->GetPlayerSlot() + 1;
 
+	// Reject voice packet if we'd send more than NET_MAX_VOICE_BYTES_FRAME voice bytes from this client in the current frame.
+	// 5 = SVC_VoiceData header/overhead
+	g_aFrameVoiceBytes[client] += 5 + nBytes;
+
+	if(g_aFrameVoiceBytes[client] > NET_MAX_VOICE_BYTES_FRAME)
+		return false;
+
 	g_fLastVoiceData[client] = gpGlobals->curtime;
+
+	return true;
 }
 
 void CVoice::HandleNetwork()
@@ -456,7 +481,7 @@ void CVoice::HandleNetwork()
 			m_aPollFds[m_PollFds].revents = 0;
 			m_PollFds++;
 
-			smutils->LogMessage(myself, "Client %d connected!\n", Client);
+			//smutils->LogMessage(myself, "Client %d connected!\n", Client);
 		}
 	}
 
@@ -482,7 +507,7 @@ void CVoice::HandleNetwork()
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
-			smutils->LogMessage(myself, "Client %d disconnected!(2)\n", Client);
+			//smutils->LogMessage(myself, "Client %d disconnected!(2)\n", Client);
 			continue;
 		}
 
@@ -515,7 +540,7 @@ void CVoice::HandleNetwork()
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
-			smutils->LogMessage(myself, "Client %d disconnected!(1)\n", Client);
+			//smutils->LogMessage(myself, "Client %d disconnected!(1)\n", Client);
 			continue;
 		}
 

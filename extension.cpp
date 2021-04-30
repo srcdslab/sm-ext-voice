@@ -312,6 +312,12 @@ const sp_nativeinfo_t MyNatives[] =
 	{ NULL, NULL }
 };
 
+static void ListenSocketAction(void *pData)
+{
+	CVoice *pThis = (CVoice *)pData;
+	pThis->ListenSocket();
+}
+
 void CVoice::SDK_OnAllLoaded()
 {
 	sharesys->AddNatives(myself, MyNatives);
@@ -350,8 +356,18 @@ void CVoice::SDK_OnAllLoaded()
 		return;
 	}
 
+	// This doesn't seem to work right away ...
 	engine->ServerCommand("exec sourcemod/extension.Voice.cfg\n");
 	engine->ServerExecute();
+
+	// ... delay starting listen server to next frame
+	smutils->AddFrameAction(ListenSocketAction, this);
+}
+
+void CVoice::ListenSocket()
+{
+	if(m_PollFds > 0)
+		return;
 
 	sockaddr_in bindAddr;
 	memset(&bindAddr, 0, sizeof(bindAddr));
@@ -475,6 +491,7 @@ void CVoice::HandleNetwork()
 			m_aClients[Client].m_LastLength = 0;
 			m_aClients[Client].m_LastValidData = 0.0;
 			m_aClients[Client].m_New = true;
+			m_aClients[Client].m_UnEven = false;
 
 			m_aPollFds[m_PollFds].fd = Socket;
 			m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
@@ -532,7 +549,16 @@ void CVoice::HandleNetwork()
 		if(min(BytesAvailable, sizeof(aBuf)) > m_Buffer.CurrentFree() * sizeof(int16_t))
 			continue;
 
-		ssize_t Bytes = recv(pClient->m_Socket, aBuf, sizeof(aBuf), 0);
+		// Edge case: previously received data is uneven and last recv'd byte has to be prepended
+		int Shift = 0;
+		if(pClient->m_UnEven)
+		{
+			Shift = 1;
+			aBuf[0] = pClient->m_Remainder;
+			pClient->m_UnEven = false;
+		}
+
+		ssize_t Bytes = recv(pClient->m_Socket, &aBuf[Shift], sizeof(aBuf) - Shift, 0);
 
 		if(Bytes <= 0)
 		{
@@ -542,6 +568,17 @@ void CVoice::HandleNetwork()
 			CompressPollFds = true;
 			//smutils->LogMessage(myself, "Client %d disconnected!(1)\n", Client);
 			continue;
+		}
+
+		Bytes += Shift;
+
+		// Edge case: data received is uneven (can't be divided by two)
+		// store last byte, drop it here and prepend it right before the next recv
+		if(Bytes & 1)
+		{
+			pClient->m_UnEven = true;
+			pClient->m_Remainder = aBuf[Bytes - 1];
+			Bytes -= 1;
 		}
 
 		// Got data!

@@ -139,6 +139,8 @@ public:
 	void OnGameFrame(bool simulating);
 	bool OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data);
 
+	void ListenSocket();
+
 private:
 	int m_ListenSocket;
 
@@ -149,6 +151,8 @@ private:
 		size_t m_LastLength;
 		double m_LastValidData;
 		bool m_New;
+		bool m_UnEven;
+		unsigned char m_Remainder;
 	} m_aClients[MAX_CLIENTS];
 
 	struct pollfd m_aPollFds[1 + MAX_CLIENTS];

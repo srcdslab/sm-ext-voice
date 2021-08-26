@@ -43,8 +43,12 @@
 #include <iserver.h>
 #include <ISDKTools.h>
 
+#include <ihltvdirector.h>
+#include <ihltv.h>
+
 #include "CDetour/detours.h"
 #include "extension.h"
+#include "extensionHelper.h"
 
 // voice packets are sent over unreliable netchannel
 //#define NET_MAX_DATAGRAM_PAYLOAD	4000	// = maximum unreliable payload size
@@ -54,8 +58,9 @@
 // sensible limit of 8 packets per frame = 552 bytes -> 185.76ms of voice data per frame
 #define NET_MAX_VOICE_BYTES_FRAME (8 * (5 + 64))
 
-ConVar g_SmVoiceAddr("sm_voice_addr", "127.0.0.1", FCVAR_PROTECTED, "Voice server listen ip address.");
-ConVar g_SmVoicePort("sm_voice_port", "27020", FCVAR_PROTECTED, "Voice server listen port.", true, 1025.0, true, 65535.0);
+ConVar *g_SmVoiceAddr = CreateConVar("sm_voice_addr", "127.0.0.1", FCVAR_PROTECTED, "Voice server listen ip address.");
+ConVar *g_SmVoicePort = CreateConVar("sm_voice_port", "27020", FCVAR_PROTECTED, "Voice server listen port.", true, 1025.0, true, 65535.0);
+ConVar *g_SvLogging = CreateConVar("sm_voice_logging", "0", FCVAR_NOTIFY, "Log client connections");
 
 /**
  * @file extension.cpp
@@ -71,12 +76,15 @@ CGlobalVars *gpGlobals = NULL;
 ISDKTools *g_pSDKTools = NULL;
 IServer *iserver = NULL;
 
-double g_fLastVoiceData[SM_MAXPLAYERS + 1];
+IHLTVDirector *hltvdirector = NULL;
+IHLTVServer *hltv = NULL;
+
 int g_aFrameVoiceBytes[SM_MAXPLAYERS + 1];
+double g_fLastVoiceData[SM_MAXPLAYERS + 1];
 
 DETOUR_DECL_STATIC4(SV_BroadcastVoiceData, void, IClient *, pClient, int, nBytes, char *, data, int64, xuid)
 {
-	if(g_Interface.OnBroadcastVoiceData(pClient, nBytes, data))
+	if (g_Interface.OnBroadcastVoiceData(pClient, nBytes, data))
 		DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, data, xuid);
 }
 
@@ -94,7 +102,7 @@ DETOUR_DECL_STATIC2(SV_BroadcastVoiceData_LTCG, void, char *, data, int64, xuid)
 	__asm mov ecx, pClient;
 	__asm mov edx, nBytes;
 
-	if(ret)
+	if (ret)
 		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
 }
 #endif
@@ -268,12 +276,15 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	celt_encoder_ctl(m_pCodec, CELT_SET_BITRATE(m_EncoderSettings.TargetBitRate_Kbps * 1000));
 	celt_encoder_ctl(m_pCodec, CELT_SET_COMPLEXITY(m_EncoderSettings.Complexity));
 
+	AutoExecConfig(g_pCVar, true);
+
 	return true;
 }
 
 bool CVoice::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetServerFactory, hltvdirector, IHLTVDirector, INTERFACEVERSION_HLTVDIRECTOR);
 	gpGlobals = ismm->GetCGlobals();
 	ConVar_Register(0, this);
 
@@ -356,10 +367,6 @@ void CVoice::SDK_OnAllLoaded()
 		return;
 	}
 
-	// This doesn't seem to work right away ...
-	engine->ServerCommand("exec sourcemod/extension.Voice.cfg\n");
-	engine->ServerExecute();
-
 	// ... delay starting listen server to next frame
 	smutils->AddFrameAction(ListenSocketAction, this);
 }
@@ -372,10 +379,10 @@ void CVoice::ListenSocket()
 	sockaddr_in bindAddr;
 	memset(&bindAddr, 0, sizeof(bindAddr));
 	bindAddr.sin_family = AF_INET;
-	inet_aton(g_SmVoiceAddr.GetString(), &bindAddr.sin_addr);
-	bindAddr.sin_port = htons(g_SmVoicePort.GetInt());
+	inet_aton(g_SmVoiceAddr->GetString(), &bindAddr.sin_addr);
+	bindAddr.sin_port = htons(g_SmVoicePort->GetInt());
 
-	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr.GetString(), g_SmVoicePort.GetInt());
+	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr->GetString(), g_SmVoicePort->GetInt());
 
 	if(bind(m_ListenSocket, (sockaddr *)&bindAddr, sizeof(sockaddr_in)) < 0)
 	{
@@ -498,7 +505,8 @@ void CVoice::HandleNetwork()
 			m_aPollFds[m_PollFds].revents = 0;
 			m_PollFds++;
 
-			//smutils->LogMessage(myself, "Client %d connected!\n", Client);
+			if (g_SvLogging->GetInt())
+				smutils->LogMessage(myself, "Client %d connected!\n", Client);
 		}
 	}
 
@@ -524,7 +532,8 @@ void CVoice::HandleNetwork()
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
-			//smutils->LogMessage(myself, "Client %d disconnected!(2)\n", Client);
+			if (g_SvLogging->GetInt())
+				smutils->LogMessage(myself, "Client %d disconnected!(2)\n", Client);
 			continue;
 		}
 
@@ -566,7 +575,8 @@ void CVoice::HandleNetwork()
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
-			//smutils->LogMessage(myself, "Client %d disconnected!(1)\n", Client);
+			if (g_SvLogging->GetInt())
+				smutils->LogMessage(myself, "Client %d disconnected!(1)\n", Client);
 			continue;
 		}
 
@@ -659,10 +669,20 @@ void CVoice::HandleVoiceData()
 	// 5 = max frames per packet
 	FramesAvailable = min(FramesAvailable, 5);
 
-	// 0 = SourceTV
-	IClient *pClient = iserver->GetClient(0);
+	// Get SourceTV Index
+	if (!hltv)
+		hltv = hltvdirector->GetHLTVServer();
+
+	int iSourceTVIndex = 0;
+	if (hltv)
+		iSourceTVIndex = hltv->GetHLTVSlot();
+
+	IClient *pClient = iserver->GetClient(iSourceTVIndex);
 	if(!pClient)
+	{
+		smutils->LogError(myself, "Couldnt get client with id %d (SourceTV)\n", iSourceTVIndex);
 		return;
+	}
 
 	for(int Frame = 0; Frame < FramesAvailable; Frame++)
 	{

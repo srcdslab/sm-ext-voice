@@ -9,6 +9,7 @@ builder.SetBuildFolder('package')
 folder_list = [
   'addons/sourcemod/extensions',
   'addons/sourcemod/scripting/include',
+  'addons/sourcemod/gamedata',
 ]
 
 if 'x86_64' in SM.target_archs:
@@ -41,6 +42,11 @@ def CopyFiles(src, dest, files):
       builder.AddCopy(source_path, dest_entry)
 
 # Include files
-CopyFiles('include', 'addons/sourcemod/scripting/include',
+CopyFiles('addons/sourcemod/scripting/include', 'addons/sourcemod/scripting/include',
   [ 'Voice.inc', ]
+)
+
+# Gamedata files
+CopyFiles('addons/sourcemod/gamedata', 'addons/sourcemod/gamedata',
+  [ 'voice.games.txt', ]
 )

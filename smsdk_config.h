@@ -40,14 +40,14 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Voice"
 #define SMEXT_CONF_DESCRIPTION	"Inject voice data over existing clients"
-#define SMEXT_CONF_VERSION		"1.2"
-#define SMEXT_CONF_AUTHOR		"BotoX"
+#define SMEXT_CONF_VERSION		"2.0"
+#define SMEXT_CONF_AUTHOR		"BotoX, maxime1907"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"VOICE"
 #define SMEXT_CONF_LICENSE		"GPL"
 #define SMEXT_CONF_DATESTRING	__DATE__
 
-/** 
+/**
  * @brief Exposes plugin's main interface.
  */
 #define SMEXT_LINK(name) SDKExtension *g_pExtensionIface = name;
@@ -59,14 +59,14 @@
 #define SMEXT_CONF_METAMOD
 
 /** Enable interfaces you want to use here by uncommenting lines */
-//#define SMEXT_ENABLE_FORWARDSYS
+#define SMEXT_ENABLE_FORWARDSYS
 //#define SMEXT_ENABLE_HANDLESYS
 #define SMEXT_ENABLE_PLAYERHELPERS
 //#define SMEXT_ENABLE_DBMANAGER
 #define SMEXT_ENABLE_GAMECONF
 #define SMEXT_ENABLE_MEMUTILS
 #define SMEXT_ENABLE_GAMEHELPERS
-//#define SMEXT_ENABLE_TIMERSYS
+#define SMEXT_ENABLE_TIMERSYS
 //#define SMEXT_ENABLE_THREADER
 //#define SMEXT_ENABLE_LIBSYS
 //#define SMEXT_ENABLE_MENUS

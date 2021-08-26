@@ -13,23 +13,34 @@ for cxx in builder.targets:
     binary = SM.HL2Library(builder, cxx, projectName + '.ext.' + sdk.ext, sdk)
 
     binary.compiler.defines += [
+      'SOURCEMOD_BUILD',
       'HAVE_STRING_H',
     ]
 
     if cxx.target.platform == 'linux':
-      cxx.postlink += ['-lpthread', '-lrt']
+      binary.compiler.postlink += ['-lpthread', '-lrt']
     elif cxx.target.platform == 'mac':
-      cxx.cflags += ['-Wno-deprecated-declarations']
-      cxx.postlink += ['-framework', 'CoreServices']
+      binary.compiler.cflags += ['-Wno-deprecated-declarations']
+      binary.compiler.postlink += ['-framework', 'CoreServices']
 
-    if cxx.family == 'gcc' or cxx.family == 'clang':
-      cxx.cxxflags += ['-fno-rtti']
-    elif cxx.family == 'msvc':
-      cxx.cxxflags += ['/GR-']
+    # if cxx.family == 'gcc' or cxx.family == 'clang':
+    #   binary.compiler.cxxflags += ['-fno-rtti']
+    # elif cxx.family == 'msvc':
+    #   binary.compiler.cxxflags += ['/GR-']
+
+    binary.compiler.cxxincludes += [
+      os.path.join(builder.sourcePath, 'pb', 'include'),
+    ]
+    binary.compiler.postlink += [
+      '-L' + os.path.join(builder.sourcePath, 'pb', 'lib'),
+      '-lprotobuf'
+    ]
 
     binary.sources += [
       'extension.cpp',
       'ringbuffer.cpp',
+      os.path.join(builder.sourcePath, 'pb', 'csgo', 'netmessages.pb.cc'),
+      # os.path.join(builder.sourcePath, 'pb', 'google', 'protobuf', 'descriptor.pb.cc'),
       os.path.join(SM.sm_root, 'extensions', 'sm-ext-common', 'mathstubs.c'),
       os.path.join(SM.sm_root, 'public', 'smsdk_ext.cpp'),
       os.path.join(SM.sm_root, 'public', 'CDetour', 'detours.cpp'),

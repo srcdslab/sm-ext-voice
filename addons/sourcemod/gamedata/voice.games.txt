@@ -1,0 +1,63 @@
+"Games"
+{
+	"#default"
+	{
+		"Signatures"
+		{
+			"SV_BroadcastVoiceData"
+			{
+				"library"		"engine"
+				"windows"		"\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x50\x83\x78\x30"
+				"linux"			"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
+			}
+		}
+	}
+	"insurgency"
+	{
+		"Signatures"
+		{
+			"SV_BroadcastVoiceData"
+			{
+				"library"		"engine"
+				"windows"		"\x55\x8B\xEC\x83\xEC\x74\x68\x2A\x2A\x2A\x2A\x8D\x4D\xE4\xE8"
+				"linux"			"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
+			}
+		}
+	}
+	"nucleardawn"
+	{
+		"Signatures"
+		{
+			"SV_BroadcastVoiceData"
+			{
+				"library"		"engine"
+				"windows"		"\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x58\x57\x33\xFF"
+				"linux"			"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
+			}
+		}
+	}
+	"left4dead2"
+	{
+		"Signatures"
+		{
+			"SV_BroadcastVoiceData"
+			{
+				"library"		"engine"
+				"windows"		"\x55\x8B\xEC\x83\xEC\x70\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\xA1\x2A\x2A\x2A\x2A\x53\x56"
+				"linux"			"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
+			}
+		}
+	}
+	"csgo"
+	{
+        "Signatures"
+		{
+			"SV_BroadcastVoiceData"
+			{
+				"library"		"engine"
+				"windows"		"\x55\x8B\xEC\x83\xE4\xF8\x81\xEC\xE4\x00\x00\x00\x53\x56\x57"
+				"linux"			"\x55\x89\xE5\x57\x56\x8D\x55\xDC"
+			}
+        }
+    }
+}

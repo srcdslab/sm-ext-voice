@@ -36,6 +36,7 @@
 #include "smsdk_ext.h"
 #include "celt_header.h"
 #include "ringbuffer.h"
+#include "pb/csgo/netmessages.pb.h"
 
 /**
  * @file extension.h
@@ -52,7 +53,6 @@ typedef long long	int64;
 
 class CDetour;
 class IClient;
-typedef void (*t_SV_BroadcastVoiceData)(IClient *, int, unsigned char *, int64);
 
 /**
  * @brief Sample implementation of the SDK Extension.
@@ -175,13 +175,12 @@ private:
 	CELTMode *m_pMode;
 	CELTEncoder *m_pCodec;
 
-	t_SV_BroadcastVoiceData m_SV_BroadcastVoiceData;
 	CDetour *m_VoiceDetour;
 
 	void HandleNetwork();
 	void OnDataReceived(CClient *pClient, int16_t *pData, size_t Samples);
 	void HandleVoiceData();
-	void BroadcastVoiceData(IClient *pClient, int nBytes, unsigned char *pData);
+	void BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *pData);
 };
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_

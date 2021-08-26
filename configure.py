@@ -1,5 +1,7 @@
 # vim: set ts=2 sw=2 tw=99 noet:
 import sys
+import os
+import subprocess
 try:
 	from ambuild2 import run, util
 except:
@@ -37,3 +39,8 @@ parser.options.add_argument('--targets', type=str, dest='targets', default=None,
 		                      help="Override the target architecture (use commas to separate multiple targets).")
 
 parser.Configure()
+
+# Run protobuf compilation and copy files to corresponding folders
+os.chdir("../pb/")
+os.chmod('./build_protobuf.sh', 0o755)
+subprocess.call("./build_protobuf.sh")

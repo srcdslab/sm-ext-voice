@@ -38,6 +38,7 @@ CSGO = {
 
 PossibleSDKs = {
   'css':  SDK('HL2SDKCSS', '2.css', '6', 'CSS', WinLinuxMac, 'css'),
+  'csgo': SDK('HL2SDKCSGO', '2.csgo', '21', 'CSGO', WinLinuxMac, 'csgo'),
 }
 
 def ResolveEnvPath(env, folder):
@@ -403,7 +404,7 @@ class ExtensionConfig(object):
           '-current_version', self.productVersion
         ]
     return binary
-    
+
   def LibraryBuilder(self, compiler, name):
     binary = compiler.Library(name)
     self.AddVersioning(binary)
@@ -599,6 +600,11 @@ class ExtensionConfig(object):
       compiler.weaklinkdeps += [output]
       compiler.linkflags[0:0] = [library]
 
+    return binary
+
+  def ProtoBufLibrary(self, context, compiler, name, sdk):
+    binary = self.Library(context, compiler, name)
+    self.ConfigureForExtension(context, binary.compiler)
     return binary
 
   def HL2Library(self, context, compiler, name, sdk):

@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Voice"
 #define SMEXT_CONF_DESCRIPTION	"Inject voice data over existing clients"
-#define SMEXT_CONF_VERSION		"1.1"
+#define SMEXT_CONF_VERSION		"1.2"
 #define SMEXT_CONF_AUTHOR		"BotoX"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"VOICE"

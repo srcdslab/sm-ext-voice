@@ -409,19 +409,19 @@ void CVoice::SDK_OnUnload()
 {
 	smutils->RemoveGameFrameHook(::OnGameFrame);
 
-	if(m_VoiceDetour)
+	if (m_VoiceDetour)
 	{
 		m_VoiceDetour->Destroy();
 		m_VoiceDetour = NULL;
 	}
 
-	if(m_ListenSocket != -1)
+	if (m_ListenSocket != -1)
 	{
 		close(m_ListenSocket);
 		m_ListenSocket = -1;
 	}
 
-	for(int Client = 0; Client < MAX_CLIENTS; Client++)
+	for (int Client = 0; Client < MAX_CLIENTS; Client++)
 	{
 		if(m_aClients[Client].m_Socket != -1)
 		{
@@ -430,11 +430,17 @@ void CVoice::SDK_OnUnload()
 		}
 	}
 
-	if(m_pCodec)
+	if (m_pCodec)
+	{
 		celt_encoder_destroy(m_pCodec);
+		m_pCodec = NULL;
+	}
 
-	if(m_pMode)
+	if (m_pMode)
+	{
 		celt_mode_destroy(m_pMode);
+		m_pMode = NULL;
+	}
 }
 
 void CVoice::OnGameFrame(bool simulating)

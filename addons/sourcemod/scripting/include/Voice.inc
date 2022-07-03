@@ -17,29 +17,6 @@
 
 native bool IsClientTalking(int client);
 
-/**
- *
- * Called when a client starts speaking.
- *
- *	@param client	Client index.
- *
- * @noreturn
- *
- */
-
-forward void OnClientSpeakingStart(int client);
-
-/**
- *
- * Called when a client ends speaking.
- *
- * @param client	Client index.
- *
- * @noreturn
- *
- */
-forward void OnClientSpeakingEnd(int client);
-
 public Extension __ext_Voice =
 {
 	name = "Voice",

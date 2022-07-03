@@ -84,10 +84,6 @@ template <typename T> inline T min(T a, T b) { return a<b?a:b; }
 CVoice g_Interface;
 SMEXT_LINK(&g_Interface);
 
-IForward *g_pSpeakingForward = NULL;
-IForward *g_pStartSpeakingForward = NULL;
-IForward *g_pEndSpeakingForward = NULL;
-
 ITimer *g_pTimerSpeaking[MAX_CLIENTS];
 
 CGlobalVars *gpGlobals = NULL;
@@ -264,9 +260,6 @@ public:
 		int client = (int)(intptr_t)pData;
 		if ((gpGlobals->curtime - g_fLastVoiceData[client]) > 0.1)
 		{
-			g_pEndSpeakingForward->PushCell(client);
-			g_pEndSpeakingForward->Execute();
-
 			if (g_SvLogging->GetInt())
 				g_pSM->LogMessage(myself, "Player Speaking End (client=%d)", client);
 
@@ -316,10 +309,6 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	m_VoiceDetour->EnableDetour();
-
-	g_pSpeakingForward = g_pForwards->CreateForward("OnClientSpeaking", ET_Event, 1, NULL, Param_Cell);
-	g_pStartSpeakingForward = g_pForwards->CreateForward("OnClientSpeakingStart", ET_Event, 1, NULL, Param_Cell);
-	g_pEndSpeakingForward = g_pForwards->CreateForward("OnClientSpeakingEnd", ET_Event, 1, NULL, Param_Cell);
 
 	AutoExecConfig(g_pCVar, true);
 
@@ -500,10 +489,6 @@ void CVoice::SDK_OnUnload()
 		m_VoiceDetour = NULL;
 	}
 
-	g_pForwards->ReleaseForward(g_pSpeakingForward);
-	g_pForwards->ReleaseForward(g_pStartSpeakingForward);
-	g_pForwards->ReleaseForward(g_pEndSpeakingForward);
-
 	if(m_ListenSocket != -1)
 	{
 		close(m_ListenSocket);
@@ -563,9 +548,6 @@ bool CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
 	if (g_pTimerSpeaking[client] == NULL)
 	{
 		g_pTimerSpeaking[client] = timersys->CreateTimer(&s_SpeakingEndTimer, 0.3f, (void *)(intptr_t)client, 1);
-
-		g_pStartSpeakingForward->PushCell(client);
-		g_pStartSpeakingForward->Execute();
 
 		if (g_SvLogging->GetInt())
 			g_pSM->LogMessage(myself, "Player Speaking Start (client=%d)", client);

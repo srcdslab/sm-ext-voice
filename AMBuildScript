@@ -1,6 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os, sys
 import traceback
+import subprocess
 
 class SDK(object):
   def __init__(self, sdk, ext, aDef, name, platform, dir):
@@ -184,6 +185,13 @@ class ExtensionConfig(object):
       raise Exception('Could not find a source copy of Metamod:Source')
     self.mms_root = Normalize(self.mms_root)
 
+    # Run protobuf compilation and copy files to corresponding folders
+    if 'csgo' in self.sdks:
+      os.chdir("../pb/")
+      os.chmod('./build_protobuf.sh', 0o755)
+      subprocess.call("./build_protobuf.sh")
+
+
   def configure(self):
     if not set(self.target_archs).issubset(['x86', 'x86_64']):
       raise Exception('Unknown target architecture: {0}'.format(self.target_archs))
@@ -207,7 +215,7 @@ class ExtensionConfig(object):
     elif cxx.family == 'msvc':
       self.configure_msvc(cxx)
 
-    # Optimizaiton
+    # Optimization
     if builder.options.opt == '1':
       cxx.defines += ['NDEBUG']
 

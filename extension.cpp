@@ -153,6 +153,7 @@ std::string hex_to_string(const std::string& input)
     return output;
 }
 
+#if SOURCE_ENGINE == SE_CSGO || SOURCE_ENGINE == SE_INSURGENCY
 void PrintCCLCMsg_VoiceData(const char *funcName, int client, const CCLCMsg_VoiceData &msg, bool drop)
 {
 	g_pSM->LogMessage(myself, "===START=======%s=============", funcName);
@@ -193,6 +194,7 @@ DETOUR_DECL_STATIC3(SV_BroadcastVoiceData_CSGO, int, IClient *, pClient, const C
 	// bool CGameClient::CLCMsg_VoiceData( const CCLCMsg_VoiceData& msg ) so wtf ???
 	return 1;
 }
+#endif
 
 DETOUR_DECL_STATIC4(SV_BroadcastVoiceData, void, IClient *, pClient, int, nBytes, char *, data, int64, xuid)
 {

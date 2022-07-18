@@ -36,7 +36,10 @@
 #include "smsdk_ext.h"
 #include "celt_header.h"
 #include "ringbuffer.h"
+
+#if SOURCE_ENGINE == SE_CSGO || SOURCE_ENGINE == SE_INSURGENCY
 #include "pb/csgo/netmessages.pb.h"
+#endif
 
 /**
  * @file extension.h

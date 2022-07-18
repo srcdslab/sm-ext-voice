@@ -23,24 +23,9 @@ for cxx in builder.targets:
       binary.compiler.cflags += ['-Wno-deprecated-declarations']
       binary.compiler.postlink += ['-framework', 'CoreServices']
 
-    # if cxx.family == 'gcc' or cxx.family == 'clang':
-    #   binary.compiler.cxxflags += ['-fno-rtti']
-    # elif cxx.family == 'msvc':
-    #   binary.compiler.cxxflags += ['/GR-']
-
-    binary.compiler.cxxincludes += [
-      os.path.join(builder.sourcePath, 'pb', 'include'),
-    ]
-    binary.compiler.postlink += [
-      '-L' + os.path.join(builder.sourcePath, 'pb', 'lib'),
-      '-lprotobuf'
-    ]
-
     binary.sources += [
       'extension.cpp',
       'ringbuffer.cpp',
-      os.path.join(builder.sourcePath, 'pb', 'csgo', 'netmessages.pb.cc'),
-      # os.path.join(builder.sourcePath, 'pb', 'google', 'protobuf', 'descriptor.pb.cc'),
       os.path.join(SM.sm_root, 'extensions', 'sm-ext-common', 'mathstubs.c'),
       os.path.join(SM.sm_root, 'public', 'smsdk_ext.cpp'),
       os.path.join(SM.sm_root, 'public', 'CDetour', 'detours.cpp'),
@@ -52,6 +37,19 @@ for cxx in builder.targets:
       os.path.join(SM.sm_root, 'public', 'libudis86', 'syn.c'),
       os.path.join(SM.sm_root, 'public', 'libudis86', 'udis86.c'),
     ]
+
+    if sdk.name in ['csgo']:
+      binary.compiler.cxxincludes += [
+        os.path.join(builder.sourcePath, 'pb', 'include'),
+      ]
+      binary.compiler.postlink += [
+        '-L' + os.path.join(builder.sourcePath, 'pb', 'lib'),
+        '-lprotobuf'
+      ]
+
+      binary.sources += [
+        os.path.join(builder.sourcePath, 'pb', 'csgo', 'netmessages.pb.cc'),
+      ]
 
     binary.compiler.cxxincludes += [
       os.path.join(builder.sourcePath, 'celt')

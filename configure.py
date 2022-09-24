@@ -26,6 +26,10 @@ parser.options.add_argument('--mms-path', type=str, dest='mms_path', default=Non
                        help='Path to Metamod:Source')
 parser.options.add_argument('--sm-path', type=str, dest='sm_path', default=None,
                        help='Path to SourceMod')
+parser.options.add_argument('--protobuf-valve-path', type=str, dest='protobuf_valve_path', default=None,
+                       help='Path to valve protobuf')
+parser.options.add_argument('--protobuf-path', type=str, dest='protobuf_path', default=None,
+                       help='Path to protobuf')
 parser.options.add_argument('--enable-debug', action='store_const', const='1', dest='debug',
                        help='Enable debugging symbols')
 parser.options.add_argument('--enable-optimize', action='store_const', const='1', dest='opt',

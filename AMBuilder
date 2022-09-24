@@ -40,15 +40,16 @@ for cxx in builder.targets:
 
     if sdk.name in ['csgo']:
       binary.compiler.cxxincludes += [
-        os.path.join(builder.sourcePath, 'pb', 'include'),
+        os.path.join(SM.protobuf_root, 'include'),
+        os.path.join(SM.protobuf_valve_root),
       ]
       binary.compiler.postlink += [
-        '-L' + os.path.join(builder.sourcePath, 'pb', 'lib'),
+        '-L' + os.path.join(SM.protobuf_root, 'lib'),
         '-lprotobuf'
       ]
 
       binary.sources += [
-        os.path.join(builder.sourcePath, 'pb', 'csgo', 'netmessages.pb.cc'),
+        os.path.join(SM.protobuf_valve_root, 'csgo', 'netmessages.pb.cc'),
       ]
 
     binary.compiler.cxxincludes += [

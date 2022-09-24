@@ -38,7 +38,7 @@
 #include "ringbuffer.h"
 
 #if SOURCE_ENGINE == SE_CSGO || SOURCE_ENGINE == SE_INSURGENCY
-#include "pb/csgo/netmessages.pb.h"
+#include "csgo/netmessages.pb.h"
 #endif
 
 /**

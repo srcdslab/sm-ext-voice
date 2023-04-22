@@ -1,18 +1,30 @@
 name: CI
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+      - master
 
 jobs:
   build:
     name: Build
     runs-on: ${{ matrix.os }}
+    permissions: write-all
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
         sourcemod-version: [1.11-dev]
         protobuf-version: [v2.5.0]
-        protobuf-valve-version: [master]
+        # Before Counter strike 2 changes
+        protobuf-valve-version: [02c5c94089d46fb14d8d94a4791e8cad7eef2d63]
         include:
           - os: ubuntu-20.04
             target-archs: x86,x86_64
@@ -26,15 +38,15 @@ jobs:
           sudo apt install -yq --no-install-recommends g++-multilib
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: extension
 
       - name: Checkout SourceMod
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: alliedmodders/sourcemod
           ref: ${{ matrix.sourcemod-version }}
@@ -42,19 +54,19 @@ jobs:
           submodules: recursive
 
       - name: Checkout AMBuild
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: alliedmodders/ambuild
           path: ambuild
 
       - name: Checkout sm-ext-common
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: srcdslab/sm-ext-common
           path: sourcemod/extensions/sm-ext-common
 
       - name: Checkout valve protobuf
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: SteamDatabase/Protobufs
           ref: ${{ matrix.protobuf-valve-version }}
@@ -62,29 +74,28 @@ jobs:
           submodules: recursive
 
       - name: Checkout protobuf
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: protocolbuffers/protobuf
           ref: ${{ matrix.protobuf-version }}
           path: protobuf
           submodules: recursive
 
+      - name: Install AMBuild
+        run: |
+          pip install --user ./ambuild
+
       - name: Install sourcemod dependencies
         run: |
           bash sourcemod/tools/checkout-deps.sh -m -s ${{ matrix.sdks }}
 
-      - name: Install AMBuild
-        uses: BSFishy/pip-action@v1
-        with:
-          packages: ./ambuild
-      
       - name: Install protobuf
         shell: bash
         run: |
           export EXTENSION_ROOT_DIR=$(pwd)
           cd protobuf
 
-          #sh autogen.sh
+          # sh autogen.sh
 
           # Fix because autogen in protobuf 2.5.0 doesnt work anymore
           autoreconf -f -i -Wall,no-obsolete
@@ -98,8 +109,15 @@ jobs:
           # Compile .proto files to c++
 
           cd ../protobuf-valve
-          ../protobuf/bin/protoc google/protobuf/descriptor.proto --cpp_out=./
-          ../protobuf/bin/protoc csgo/netmessages.proto --cpp_out=./
+
+          # Counter strike 2 ?
+          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networksystem_protomessages.proto --cpp_out=$PWD
+          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/network_connection.proto --cpp_out=$PWD
+          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networkbasetypes.proto --cpp_out=$PWD
+
+          # CSGO
+          ../protobuf/bin/protoc -I=$PWD $PWD/google/protobuf/descriptor.proto --cpp_out=$PWD
+          ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/netmessages.proto --cpp_out=$PWD
           ls -all
 
       - name: Build
@@ -113,7 +131,7 @@ jobs:
           ambuild
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ runner.os }}
           path: extension/build/package
@@ -127,7 +145,7 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
 
       - name: Package
         run: |

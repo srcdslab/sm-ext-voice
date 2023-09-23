@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
-        sourcemod-version: [1.12]
+        sourcemod-version: [1.12.0]
         protobuf-version: [v2.5.0]
         # Before Counter strike 2 changes
         protobuf-valve-version: [02c5c94089d46fb14d8d94a4791e8cad7eef2d63]

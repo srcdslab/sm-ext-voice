@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
-        sourcemod-version: [1.11-dev]
+        sourcemod-version: [1.12]
         protobuf-version: [v2.5.0]
         # Before Counter strike 2 changes
         protobuf-valve-version: [02c5c94089d46fb14d8d94a4791e8cad7eef2d63]
@@ -40,12 +40,12 @@ jobs:
         uses: actions/setup-python@v4
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: extension
 
       - name: Checkout SourceMod
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/sourcemod
           ref: ${{ matrix.sourcemod-version }}
@@ -53,19 +53,19 @@ jobs:
           submodules: recursive
 
       - name: Checkout AMBuild
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/ambuild
           path: ambuild
 
       - name: Checkout sm-ext-common
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: srcdslab/sm-ext-common
           path: sourcemod/extensions/sm-ext-common
 
       - name: Checkout valve protobuf
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: SteamDatabase/Protobufs
           ref: ${{ matrix.protobuf-valve-version }}
@@ -73,7 +73,7 @@ jobs:
           submodules: recursive
 
       - name: Checkout protobuf
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: protocolbuffers/protobuf
           ref: ${{ matrix.protobuf-version }}

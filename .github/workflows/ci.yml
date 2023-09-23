@@ -5,12 +5,14 @@ on:
     branches:
       - main
       - master
+      - sm-1.12
     tags:
       - '*'
   pull_request:
     branches:
       - main
       - master
+      - sm-1.12
 
 jobs:
   build:

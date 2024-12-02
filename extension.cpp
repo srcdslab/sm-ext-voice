@@ -805,11 +805,19 @@ void CVoice::HandleVoiceData()
 		unsigned char aFinal[PacketSize];
 		int FinalSize = 0;
 
-		FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, sizeof(aFinal));
-
-		if(FinalSize <= 0)
+		if (m_pCodec)
 		{
-			smutils->LogError(myself, "Compress returned %d\n", FinalSize);
+			FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, sizeof(aFinal));
+
+			if(FinalSize <= 0)
+			{
+				smutils->LogError(myself, "Compress returned %d\n", FinalSize);
+				return;
+			}
+		}
+		else
+		{
+			smutils->LogError(myself, "CELT codec is null\n");
 			return;
 		}
 

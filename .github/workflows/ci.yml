@@ -40,12 +40,12 @@ jobs:
         uses: actions/setup-python@v5
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: extension
 
       - name: Checkout SourceMod
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/sourcemod
           ref: ${{ matrix.sourcemod-version }}
@@ -53,19 +53,19 @@ jobs:
           submodules: recursive
 
       - name: Checkout AMBuild
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/ambuild
           path: ambuild
 
       - name: Checkout sm-ext-common
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: srcdslab/sm-ext-common
           path: sourcemod/extensions/sm-ext-common
 
       - name: Checkout valve protobuf
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: SteamDatabase/Protobufs
           ref: ${{ matrix.protobuf-valve-version }}
@@ -73,7 +73,7 @@ jobs:
           submodules: recursive
 
       - name: Checkout protobuf
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: protocolbuffers/protobuf
           ref: ${{ matrix.protobuf-version }}

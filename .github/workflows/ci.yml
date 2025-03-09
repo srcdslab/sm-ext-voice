@@ -1,175 +1,74 @@
-name: CI
+name: Build AlliedModders Extension
 
 on:
   push:
     branches:
-      - main
       - master
+      - main
     tags:
-      - '*'
+      - "*"
   pull_request:
     branches:
-      - main
       - master
+      - main
 
 jobs:
-  build:
-    name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-20.04]
-        sourcemod-version: [1.11-dev]
-        protobuf-version: [v2.5.0]
-        # Before Counter strike 2 changes
-        protobuf-valve-version: [02c5c94089d46fb14d8d94a4791e8cad7eef2d63]
-        include:
-          - os: ubuntu-20.04
-            target-archs: x86,x86_64
-            sdks: css,csgo
+  # install-protobuf:
+  #   runs-on: ubuntu-20.04
+  #   env:
+  #     PROTOBUF_REF: 'v2.5.0'
+  #     # Before Counter strike 2 changes
+  #     PROTOBUF_VALVE_REF: '02c5c94089d46fb14d8d94a4791e8cad7eef2d63'
+  #   steps:
+  #     - name: Checkout valve protobuf
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: SteamDatabase/Protobufs
+  #         ref: ${{ env.PROTOBUF_VALVE_REF }}
+  #         path: protobuf-valve
+  #         submodules: recursive
 
-    steps:
-      - name: Install Linux packages
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt update
-          sudo apt install -yq --no-install-recommends g++-multilib
+  #     - name: Checkout protobuf
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: protocolbuffers/protobuf
+  #         ref: ${{ env.PROTOBUF_REF }}
+  #         path: protobuf
+  #         submodules: recursive
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  #     - name: Install protobuf
+  #       shell: bash
+  #       run: |
+  #         export EXTENSION_ROOT_DIR=$(pwd)
+  #         cd protobuf
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          path: extension
+  #         # sh autogen.sh
 
-      - name: Checkout SourceMod
-        uses: actions/checkout@v4
-        with:
-          repository: alliedmodders/sourcemod
-          ref: ${{ matrix.sourcemod-version }}
-          path: sourcemod
-          submodules: recursive
+  #         # Fix because autogen in protobuf 2.5.0 doesnt work anymore
+  #         autoreconf -f -i -Wall,no-obsolete
+  #         rm -rf autom4te.cache config.h.in~
 
-      - name: Checkout AMBuild
-        uses: actions/checkout@v4
-        with:
-          repository: alliedmodders/ambuild
-          path: ambuild
+  #         # Make sure to compile for 32bit with old ABI for std::string compatibility
+  #         ./configure --prefix=$EXTENSION_ROOT_DIR/protobuf --build=i686-pc-linux-gnu "CFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" "CXXFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" "LDFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" --disable-shared --enable-static
+  #         make -j 8
+  #         make install
 
-      - name: Checkout sm-ext-common
-        uses: actions/checkout@v4
-        with:
-          repository: srcdslab/sm-ext-common
-          path: sourcemod/extensions/sm-ext-common
+  #         # Compile .proto files to c++
 
-      - name: Checkout valve protobuf
-        uses: actions/checkout@v4
-        with:
-          repository: SteamDatabase/Protobufs
-          ref: ${{ matrix.protobuf-valve-version }}
-          path: protobuf-valve
-          submodules: recursive
+  #         cd ../protobuf-valve
 
-      - name: Checkout protobuf
-        uses: actions/checkout@v4
-        with:
-          repository: protocolbuffers/protobuf
-          ref: ${{ matrix.protobuf-version }}
-          path: protobuf
-          submodules: recursive
+  #         # Counter strike 2 ?
+  #         # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networksystem_protomessages.proto --cpp_out=$PWD
+  #         # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/network_connection.proto --cpp_out=$PWD
+  #         # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networkbasetypes.proto --cpp_out=$PWD
 
-      - name: Install AMBuild
-        run: |
-          pip install --user ./ambuild
+  #         # CSGO
+  #         ../protobuf/bin/protoc -I=$PWD $PWD/google/protobuf/descriptor.proto --cpp_out=$PWD
+  #         ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/netmessages.proto --cpp_out=$PWD
+  #         ls -all
 
-      - name: Install sourcemod dependencies
-        run: |
-          bash sourcemod/tools/checkout-deps.sh -m -s ${{ matrix.sdks }}
-
-      - name: Install protobuf
-        shell: bash
-        run: |
-          export EXTENSION_ROOT_DIR=$(pwd)
-          cd protobuf
-
-          # sh autogen.sh
-
-          # Fix because autogen in protobuf 2.5.0 doesnt work anymore
-          autoreconf -f -i -Wall,no-obsolete
-          rm -rf autom4te.cache config.h.in~
-
-          # Make sure to compile for 32bit with old ABI for std::string compatibility
-          ./configure --prefix=$EXTENSION_ROOT_DIR/protobuf --build=i686-pc-linux-gnu "CFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" "CXXFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" "LDFLAGS=-m32 -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14" --disable-shared --enable-static
-          make -j 8
-          make install
-
-          # Compile .proto files to c++
-
-          cd ../protobuf-valve
-
-          # Counter strike 2 ?
-          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networksystem_protomessages.proto --cpp_out=$PWD
-          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/network_connection.proto --cpp_out=$PWD
-          # ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/networkbasetypes.proto --cpp_out=$PWD
-
-          # CSGO
-          ../protobuf/bin/protoc -I=$PWD $PWD/google/protobuf/descriptor.proto --cpp_out=$PWD
-          ../protobuf/bin/protoc -I=$PWD -I=$PWD/csgo $PWD/csgo/netmessages.proto --cpp_out=$PWD
-          ls -all
-
-      - name: Build
-        working-directory: extension
-        shell: bash
-        env:
-          BREAKPAD_SYMBOL_SERVER: ${{ secrets.BREAKPAD_SYMBOL_SERVER }}
-        run: |
-          mkdir build && cd build
-          python ../configure.py --enable-optimize --targets=${{ matrix.target-archs }} --sdks=${{ matrix.sdks }}
-          ambuild
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ runner.os }}
-          path: extension/build/package
-
-
-  release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Package
-        run: |
-          version=`echo $GITHUB_REF | sed "s/refs\/tags\///"`
-          ls -Rall
-          if [ -d "./Linux/" ]; then
-            cd ./Linux/
-            tar -czf ../${{ github.event.repository.name }}-${version}-linux.tar.gz -T <(\ls -1)
-            cd -
-          fi
-          if [ -d "./macOS/" ]; then
-            cd ./macOS/
-            tar -czf ../${{ github.event.repository.name }}-${version}-mac.tar.gz -T <(\ls -1)
-            cd -
-          fi
-          if [ -d "./Windows/" ]; then
-            cd ./Windows/
-            tar -czf ../${{ github.event.repository.name }}-${version}-windows.tar.gz -T <(\ls -1)
-            cd -
-          fi
-
-      - name: Release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: '*.tar.gz'
-          tag: ${{ github.ref }}
-          file_glob: true
+  build-release-extension:
+    uses: srcdslab/ci-workflows/.github/workflows/shared_build_release_am_extension.yml@v1
+    # needs: install-protobuf
+    with:
+      sdks: "css"

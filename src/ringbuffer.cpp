@@ -5,7 +5,12 @@
 #undef NDEBUG
 #include <assert.h>
 
-template <typename T> inline T min(T a, T b) { return a<b?a:b; }
+#ifdef _WIN32
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
+template <typename T> inline T min_ext(T a, T b) { return a<b?a:b; }
 
 CRingBuffer::CRingBuffer() : m_BufferSize(sizeof(m_aBuffer) / sizeof(*m_aBuffer))
 {
@@ -74,7 +79,7 @@ bool CRingBuffer::Push(int16_t *pData, size_t Samples)
 	if(CurrentLength() < TotalLength())
 	{
 		//
-		size_t ToMix = min(Samples, TotalLength() - CurrentLength());
+		size_t ToMix = min_ext(Samples, TotalLength() - CurrentLength());
 
 		if(m_WriteIndex + ToMix > m_BufferSize)
 		{

@@ -37,10 +37,12 @@
  * @brief Contains macros for configuring basic extension information.
  */
 
+#include "version.h"
+
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Voice"
 #define SMEXT_CONF_DESCRIPTION	"Inject voice data over existing clients"
-#define SMEXT_CONF_VERSION		"2.0"
+#define SMEXT_CONF_VERSION		SM_FULL_VERSION
 #define SMEXT_CONF_AUTHOR		"BotoX, maxime1907"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"VOICE"

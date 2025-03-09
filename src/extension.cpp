@@ -32,13 +32,22 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <fcntl.h>
-#include <poll.h>
+#include <ctime>
+
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  typedef SOCKET socket_t;
+#else
+  #include <sys/types.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <sys/ioctl.h>
+  #include <poll.h>
+  typedef int socket_t;
+#endif
 
 #include <iclient.h>
 #include <iserver.h>
@@ -51,7 +60,7 @@
 
 #include "CDetour/detours.h"
 #include "extension.h"
-#include "extensionHelper.h"
+#include "convarhelper.h"
 
 // voice packets are sent over unreliable netchannel
 //#define NET_MAX_DATAGRAM_PAYLOAD	4000	// = maximum unreliable payload size
@@ -79,7 +88,12 @@ ConVar *g_SvTestDataHex = CreateConVar("sm_voice_debug_celt_data", "", FCVAR_NOT
  * @brief Implement extension code here.
  */
 
-template <typename T> inline T min(T a, T b) { return a<b?a:b; }
+#ifdef _WIN32
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
+template <typename T> inline T min_ext(T a, T b) { return a<b?a:b; }
 
 CVoice g_Interface;
 SMEXT_LINK(&g_Interface);
@@ -93,7 +107,7 @@ IServer *iserver = NULL;
 IHLTVDirector *hltvdirector = NULL;
 IHLTVServer *hltv = NULL;
 
-int g_aFrameVoiceBytes[SM_MAXPLAYERS + 1];
+size_t g_aFrameVoiceBytes[SM_MAXPLAYERS + 1];
 double g_fLastVoiceData[SM_MAXPLAYERS + 1];
 
 IGameConfig *g_pGameConf = NULL;
@@ -208,27 +222,41 @@ DETOUR_DECL_STATIC2(SV_BroadcastVoiceData_LTCG, void, char *, data, int64, xuid)
 	IClient *pClient = NULL;
 	int nBytes = 0;
 
+#ifndef WIN64
 	__asm mov pClient, ecx;
 	__asm mov nBytes, edx;
+#endif
 
 	bool ret = g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
 
+#ifndef WIN64
 	__asm mov ecx, pClient;
 	__asm mov edx, nBytes;
+#endif
 
 	if (ret)
 		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
 }
 #endif
 
-double getTime()
-{
-    struct timespec tv;
-    if(clock_gettime(CLOCK_REALTIME, &tv) != 0)
-    	return 0;
-
-    return (tv.tv_sec + (tv.tv_nsec / 1000000000.0));
+#ifdef _WIN32
+double getTime() {
+    LARGE_INTEGER freq, count;
+    if (!QueryPerformanceFrequency(&freq) || !QueryPerformanceCounter(&count)) {
+        return 0.0;
+    }
+    return static_cast<double>(count.QuadPart) / static_cast<double>(freq.QuadPart);
 }
+
+#else
+double getTime() {
+    struct timespec tv;
+    if (clock_gettime(CLOCK_REALTIME, &tv) != 0) {
+        return 0.0;
+    }
+    return tv.tv_sec + tv.tv_nsec / 1e9;
+}
+#endif
 
 void OnGameFrame(bool simulating)
 {
@@ -319,22 +347,22 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		g_pSM->LogMessage(myself, "== Voice Encoder Settings ==");
 		g_pSM->LogMessage(myself, "SampleRateHertzKbps: %d", g_SvSampleRateHz->GetInt());
 		g_pSM->LogMessage(myself, "BitRate: %d", g_SvBitRateKbps->GetInt());
-		g_pSM->LogMessage(myself, "FrameSize: %d", g_SvFrameSize->GetInt());
-		g_pSM->LogMessage(myself, "PacketSize: %d", g_SvPacketSize->GetInt());
-		g_pSM->LogMessage(myself, "Complexity: %d", g_SvComplexity->GetInt());
+		g_pSM->LogMessage(myself, "frameSize: %d", g_SvFrameSize->GetInt());
+		g_pSM->LogMessage(myself, "packetSize: %d", g_SvPacketSize->GetInt());
+		g_pSM->LogMessage(myself, "complexity: %d", g_SvComplexity->GetInt());
 	}
 
 	// Encoder settings
-	m_EncoderSettings.SampleRate_Hz = g_SvSampleRateHz->GetInt();
-	m_EncoderSettings.TargetBitRate_Kbps = g_SvBitRateKbps->GetInt();
-	m_EncoderSettings.FrameSize = g_SvFrameSize->GetInt(); // samples
-	m_EncoderSettings.PacketSize = g_SvPacketSize->GetInt();
-	m_EncoderSettings.Complexity = g_SvComplexity->GetInt(); // 0 - 10
-	m_EncoderSettings.FrameTime = (double)m_EncoderSettings.FrameSize / (double)m_EncoderSettings.SampleRate_Hz;
+	m_EncoderSettings.sampleRateHz = g_SvSampleRateHz->GetInt();
+	m_EncoderSettings.targetBitRateKBPS = g_SvBitRateKbps->GetInt();
+	m_EncoderSettings.frameSize = g_SvFrameSize->GetInt(); // samples
+	m_EncoderSettings.packetSize = g_SvPacketSize->GetInt();
+	m_EncoderSettings.complexity = g_SvComplexity->GetInt(); // 0 - 10
+	m_EncoderSettings.frameTime = (double)m_EncoderSettings.frameSize / (double)m_EncoderSettings.sampleRateHz;
 
 	// Init CELT encoder
 	int theError;
-	m_pMode = celt_mode_create(m_EncoderSettings.SampleRate_Hz, m_EncoderSettings.FrameSize, &theError);
+	m_pMode = celt_mode_create(m_EncoderSettings.sampleRateHz, m_EncoderSettings.frameSize, &theError);
 	if(!m_pMode)
 	{
 		g_SMAPI->Format(error, maxlength, "celt_mode_create error: %d", theError);
@@ -351,8 +379,8 @@ bool CVoice::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	celt_encoder_ctl(m_pCodec, CELT_RESET_STATE_REQUEST, NULL);
-	celt_encoder_ctl(m_pCodec, CELT_SET_BITRATE(m_EncoderSettings.TargetBitRate_Kbps * 1000));
-	celt_encoder_ctl(m_pCodec, CELT_SET_COMPLEXITY(m_EncoderSettings.Complexity));
+	celt_encoder_ctl(m_pCodec, CELT_SET_BITRATE(m_EncoderSettings.targetBitRateKBPS * 1000));
+	celt_encoder_ctl(m_pCodec, CELT_SET_COMPLEXITY(m_EncoderSettings.complexity));
 
 	return true;
 }
@@ -436,7 +464,7 @@ void CVoice::SDK_OnAllLoaded()
 	}
 
 	int yes = 1;
-	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
+	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&yes, sizeof(yes)) < 0)
 	{
 		smutils->LogError(myself, "Failed setting SO_REUSEADDR on socket.");
 		SDK_OnUnload();
@@ -447,6 +475,45 @@ void CVoice::SDK_OnAllLoaded()
 	smutils->AddFrameAction(ListenSocketAction, this);
 }
 
+
+bool convert_ip(const char *ip, struct in_addr *addr)
+{
+#ifdef _WIN32
+    return InetPton(AF_INET, ip, addr) == 1;
+#else
+    return inet_aton(ip, addr) != 0;
+#endif
+}
+
+void close_socket(int sock)
+{
+#ifdef _WIN32
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+}
+
+int my_poll(struct pollfd *fds, int nfds, int timeout)
+{
+#ifdef _WIN32
+	// Define nfds_t on Windows if needed
+	typedef int nfds_t;
+	return WSAPoll(fds, nfds, timeout);
+#else
+	return poll(fds, nfds, timeout);
+#endif
+}
+
+int my_ioctl(socket_t sockfd, long cmd, size_t *argp)
+{
+#ifdef _WIN32
+    return ioctlsocket(sockfd, cmd, reinterpret_cast<u_long*>(argp)); // Windows version
+#else
+    return ioctl(sockfd, cmd, argp);        // Linux/macOS version
+#endif
+}
+
 void CVoice::ListenSocket()
 {
 	if(m_PollFds > 0)
@@ -455,7 +522,12 @@ void CVoice::ListenSocket()
 	sockaddr_in bindAddr;
 	memset(&bindAddr, 0, sizeof(bindAddr));
 	bindAddr.sin_family = AF_INET;
-	inet_aton(g_SmVoiceAddr->GetString(), &bindAddr.sin_addr);
+	if (!convert_ip(g_SmVoiceAddr->GetString(), &bindAddr.sin_addr))
+	{
+		smutils->LogError(myself, "Failed to convert ip.");
+		SDK_OnUnload();
+		return;
+	}
 	bindAddr.sin_port = htons(g_SmVoicePort->GetInt());
 
 	smutils->LogMessage(myself, "Binding to %s:%d!\n", g_SmVoiceAddr->GetString(), g_SmVoicePort->GetInt());
@@ -493,7 +565,7 @@ void CVoice::SDK_OnUnload()
 
 	if(m_ListenSocket != -1)
 	{
-		close(m_ListenSocket);
+		close_socket(m_ListenSocket);
 		m_ListenSocket = -1;
 	}
 
@@ -501,7 +573,7 @@ void CVoice::SDK_OnUnload()
 	{
 		if(m_aClients[Client].m_Socket != -1)
 		{
-			close(m_aClients[Client].m_Socket);
+			close_socket(m_aClients[Client].m_Socket);
 			m_aClients[Client].m_Socket = -1;
 		}
 	}
@@ -528,7 +600,7 @@ void CVoice::OnGameFrame(bool simulating)
 	memset(g_aFrameVoiceBytes, 0, sizeof(g_aFrameVoiceBytes));
 }
 
-bool CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
+bool CVoice::OnBroadcastVoiceData(IClient *pClient, size_t nBytes, char *data)
 {
 	// Reject empty packets
 	if(nBytes < 1)
@@ -538,7 +610,8 @@ bool CVoice::OnBroadcastVoiceData(IClient *pClient, int nBytes, char *data)
 
 	// Reject voice packet if we'd send more than NET_MAX_VOICE_BYTES_FRAME voice bytes from this client in the current frame.
 	// 5 = SVC_VoiceData header/overhead
-	g_aFrameVoiceBytes[client] += 5 + nBytes;
+	size_t voice_data_header = 5;
+	g_aFrameVoiceBytes[client] += voice_data_header + nBytes;
 
 #if SOURCE_ENGINE != SE_CSGO && SOURCE_ENGINE == SE_INSURGENCY
 	if (g_aFrameVoiceBytes[client] > NET_MAX_VOICE_BYTES_FRAME)
@@ -563,7 +636,7 @@ void CVoice::HandleNetwork()
 	if(m_ListenSocket == -1)
 		return;
 
-	int PollRes = poll(m_aPollFds, m_PollFds, 0);
+	int PollRes = my_poll(m_aPollFds, m_PollFds, 0);
 	if(PollRes <= 0)
 		return;
 
@@ -582,7 +655,7 @@ void CVoice::HandleNetwork()
 		if(Client != MAX_CLIENTS)
 		{
 			sockaddr_in addr;
-			size_t size = sizeof(sockaddr_in);
+			socklen_t size = sizeof(sockaddr_in);
 			int Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
 
 			m_aClients[Client].m_Socket = Socket;
@@ -621,7 +694,7 @@ void CVoice::HandleNetwork()
 		if(m_aPollFds[PollFds].revents & POLLHUP)
 		{
 			if (pClient->m_Socket != -1)
-				close(pClient->m_Socket);
+				close_socket(pClient->m_Socket);
 
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
@@ -636,7 +709,7 @@ void CVoice::HandleNetwork()
 			continue;
 
 		size_t BytesAvailable;
-		if(ioctl(pClient->m_Socket, FIONREAD, &BytesAvailable) == -1)
+		if(my_ioctl(pClient->m_Socket, FIONREAD, &BytesAvailable) == -1)
 			continue;
 
 		if(pClient->m_New)
@@ -648,8 +721,8 @@ void CVoice::HandleNetwork()
 		m_Buffer.SetWriteIndex(pClient->m_BufferWriteIndex);
 
 		// Don't recv() when we can't fit data into the ringbuffer
-		unsigned char aBuf[32768];
-		if(min(BytesAvailable, sizeof(aBuf)) > m_Buffer.CurrentFree() * sizeof(int16_t))
+		char aBuf[32768];
+		if(min_ext(BytesAvailable, sizeof(aBuf)) > m_Buffer.CurrentFree() * sizeof(int16_t))
 			continue;
 
 		// Edge case: previously received data is uneven and last recv'd byte has to be prepended
@@ -666,7 +739,7 @@ void CVoice::HandleNetwork()
 		if(Bytes <= 0)
 		{
 			if (pClient->m_Socket != -1)
-				close(pClient->m_Socket);
+				close_socket(pClient->m_Socket);
 
 			pClient->m_Socket = -1;
 			m_aPollFds[PollFds].fd = -1;
@@ -746,10 +819,10 @@ void CVoice::OnDataReceived(CClient *pClient, int16_t *pData, size_t Samples)
 
 void CVoice::HandleVoiceData()
 {
-	int SamplesPerFrame = m_EncoderSettings.FrameSize;
-	int PacketSize = m_EncoderSettings.PacketSize;
-	int FramesAvailable = m_Buffer.TotalLength() / SamplesPerFrame;
-	float TimeAvailable = (float)m_Buffer.TotalLength() / (float)m_EncoderSettings.SampleRate_Hz;
+	int SamplesPerFrame = m_EncoderSettings.frameSize;
+	int packetSize = m_EncoderSettings.packetSize;
+	size_t FramesAvailable = m_Buffer.TotalLength() / SamplesPerFrame;
+	float TimeAvailable = (float)m_Buffer.TotalLength() / (float)m_EncoderSettings.sampleRateHz;
 
 	if(!FramesAvailable)
 		return;
@@ -763,7 +836,8 @@ void CVoice::HandleVoiceData()
 		return;
 
 	// 5 = max frames per packet
-	FramesAvailable = min(FramesAvailable, 5);
+  size_t max_frames = 5;
+	FramesAvailable = min_ext(FramesAvailable, max_frames);
 
 	// Get SourceTV Index
 	if (!hltv)
@@ -786,10 +860,10 @@ void CVoice::HandleVoiceData()
 		return;
 	}
 
-	for(int Frame = 0; Frame < FramesAvailable; Frame++)
+	for(size_t Frame = 0; Frame < FramesAvailable; Frame++)
 	{
 		// Get data into buffer from ringbuffer.
-		int16_t aBuffer[SamplesPerFrame];
+		int16_t *aBuffer = new int16_t[SamplesPerFrame];
 
 		size_t OldReadIdx = m_Buffer.m_ReadIndex;
 		size_t OldCurLength = m_Buffer.CurrentLength();
@@ -797,17 +871,17 @@ void CVoice::HandleVoiceData()
 
 		if(!m_Buffer.Pop(aBuffer, SamplesPerFrame))
 		{
-			printf("Buffer pop failed!!! Samples: %u, Length: %u\n", SamplesPerFrame, m_Buffer.TotalLength());
+			printf("Buffer pop failed!!! Samples: %u, Length: %zu\n", SamplesPerFrame, m_Buffer.TotalLength());
 			return;
 		}
 
 		// Encode it!
-		unsigned char aFinal[PacketSize];
+		unsigned char *aFinal = new unsigned char[packetSize];
 		int FinalSize = 0;
 
 		if (m_pCodec)
 		{
-			FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, sizeof(aFinal));
+			FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, packetSize);
 
 			if(FinalSize <= 0)
 			{
@@ -839,12 +913,15 @@ void CVoice::HandleVoiceData()
 		}
 
 		BroadcastVoiceData(pClient, FinalSize, aFinal);
+
+		delete[] aBuffer;
+		delete[] aFinal;
 	}
 
 	if(m_AvailableTime < getTime())
 		m_AvailableTime = getTime();
 
-	m_AvailableTime += (double)FramesAvailable * m_EncoderSettings.FrameTime;
+	m_AvailableTime += (double)FramesAvailable * m_EncoderSettings.frameTime;
 }
 
 void CVoice::BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *pData)
@@ -888,7 +965,7 @@ void CVoice::BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *
 			msg.set_data(testing.c_str(), testing.size());
 		}
 
-		uncompressed_sample_offset += m_EncoderSettings.FrameSize;
+		uncompressed_sample_offset += m_EncoderSettings.frameSize;
 
 		msg.set_format(VOICEDATA_FORMAT_ENGINE);
 		msg.set_sequence_bytes(sequence_bytes);
@@ -905,12 +982,16 @@ void CVoice::BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *
 	#endif
 #else
 	#ifdef _WIN32
+		#ifndef WIN64
 		__asm mov ecx, pClient;
 		__asm mov edx, nBytes;
+		#endif
 
-		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
+		if (g_SvCallOriginalBroadcast->GetInt())
+			DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
 	#else
-		DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
+		if (g_SvCallOriginalBroadcast->GetInt())
+			DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
 	#endif
 #endif
 }

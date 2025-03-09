@@ -222,27 +222,41 @@ DETOUR_DECL_STATIC2(SV_BroadcastVoiceData_LTCG, void, char *, data, int64, xuid)
 	IClient *pClient = NULL;
 	int nBytes = 0;
 
+#ifndef WIN64
 	__asm mov pClient, ecx;
 	__asm mov nBytes, edx;
+#endif
 
 	bool ret = g_Interface.OnBroadcastVoiceData(pClient, nBytes, data);
 
+#ifndef WIN64
 	__asm mov ecx, pClient;
 	__asm mov edx, nBytes;
+#endif
 
 	if (ret)
 		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)(data, xuid);
 }
 #endif
 
-double getTime()
-{
-    struct timespec tv;
-    if(clock_gettime(CLOCK_REALTIME, &tv) != 0)
-    	return 0;
-
-    return (tv.tv_sec + (tv.tv_nsec / 1000000000.0));
+#ifdef _WIN32
+double getTime() {
+    LARGE_INTEGER freq, count;
+    if (!QueryPerformanceFrequency(&freq) || !QueryPerformanceCounter(&count)) {
+        return 0.0;
+    }
+    return static_cast<double>(count.QuadPart) / static_cast<double>(freq.QuadPart);
 }
+
+#else
+double getTime() {
+    struct timespec tv;
+    if (clock_gettime(CLOCK_REALTIME, &tv) != 0) {
+        return 0.0;
+    }
+    return tv.tv_sec + tv.tv_nsec / 1e9;
+}
+#endif
 
 void OnGameFrame(bool simulating)
 {
@@ -450,7 +464,7 @@ void CVoice::SDK_OnAllLoaded()
 	}
 
 	int yes = 1;
-	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
+	if(setsockopt(m_ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&yes, sizeof(yes)) < 0)
 	{
 		smutils->LogError(myself, "Failed setting SO_REUSEADDR on socket.");
 		SDK_OnUnload();
@@ -494,7 +508,7 @@ int my_poll(struct pollfd *fds, int nfds, int timeout)
 int my_ioctl(socket_t sockfd, long cmd, size_t *argp)
 {
 #ifdef _WIN32
-    return ioctlsocket(sockfd, cmd, argp); // Windows version
+    return ioctlsocket(sockfd, cmd, reinterpret_cast<u_long*>(argp)); // Windows version
 #else
     return ioctl(sockfd, cmd, argp);        // Linux/macOS version
 #endif
@@ -596,7 +610,7 @@ bool CVoice::OnBroadcastVoiceData(IClient *pClient, size_t nBytes, char *data)
 
 	// Reject voice packet if we'd send more than NET_MAX_VOICE_BYTES_FRAME voice bytes from this client in the current frame.
 	// 5 = SVC_VoiceData header/overhead
-  size_t voice_data_header = 5;
+	size_t voice_data_header = 5;
 	g_aFrameVoiceBytes[client] += voice_data_header + nBytes;
 
 #if SOURCE_ENGINE != SE_CSGO && SOURCE_ENGINE == SE_INSURGENCY
@@ -707,7 +721,7 @@ void CVoice::HandleNetwork()
 		m_Buffer.SetWriteIndex(pClient->m_BufferWriteIndex);
 
 		// Don't recv() when we can't fit data into the ringbuffer
-		unsigned char aBuf[32768];
+		char aBuf[32768];
 		if(min_ext(BytesAvailable, sizeof(aBuf)) > m_Buffer.CurrentFree() * sizeof(int16_t))
 			continue;
 
@@ -849,7 +863,7 @@ void CVoice::HandleVoiceData()
 	for(size_t Frame = 0; Frame < FramesAvailable; Frame++)
 	{
 		// Get data into buffer from ringbuffer.
-		int16_t aBuffer[SamplesPerFrame];
+		int16_t *aBuffer = new int16_t[SamplesPerFrame];
 
 		size_t OldReadIdx = m_Buffer.m_ReadIndex;
 		size_t OldCurLength = m_Buffer.CurrentLength();
@@ -862,12 +876,12 @@ void CVoice::HandleVoiceData()
 		}
 
 		// Encode it!
-		unsigned char aFinal[packetSize];
+		unsigned char *aFinal = new unsigned char[packetSize];
 		int FinalSize = 0;
 
 		if (m_pCodec)
 		{
-			FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, sizeof(aFinal));
+			FinalSize = celt_encode(m_pCodec, aBuffer, SamplesPerFrame, aFinal, packetSize);
 
 			if(FinalSize <= 0)
 			{
@@ -899,6 +913,9 @@ void CVoice::HandleVoiceData()
 		}
 
 		BroadcastVoiceData(pClient, FinalSize, aFinal);
+
+		delete[] aBuffer;
+		delete[] aFinal;
 	}
 
 	if(m_AvailableTime < getTime())
@@ -965,12 +982,16 @@ void CVoice::BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *
 	#endif
 #else
 	#ifdef _WIN32
+		#ifndef WIN64
 		__asm mov ecx, pClient;
 		__asm mov edx, nBytes;
+		#endif
 
-		DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
+		if (g_SvCallOriginalBroadcast->GetInt())
+			DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
 	#else
-		DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
+		if (g_SvCallOriginalBroadcast->GetInt())
+			DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
 	#endif
 #endif
 }

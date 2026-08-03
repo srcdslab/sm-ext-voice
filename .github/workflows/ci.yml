@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - 'main-dolly'
     tags:
       - "*"
   pull_request:

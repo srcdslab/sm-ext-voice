@@ -693,14 +693,10 @@ void CVoice::HandleNetwork()
 		// no free slot
 		if(Client != MAX_CLIENTS)
 		{
-			sockaddr_in addr;
-			socklen_t size = sizeof(sockaddr_in);
-
-			// First accept the socket connection and then check the address.
-			int Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
-
 			struct sockaddr_storage addr;
-			size_t size = sizeof(addr);
+			socklen_t size = sizeof(addr);
+
+			int Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
 
 			if (Socket != -1)
 			{
@@ -718,7 +714,7 @@ void CVoice::HandleNetwork()
 					if (IN6_IS_ADDR_V4MAPPED(&(s->sin6_addr)))
 					{
 						struct in_addr sin_addr;
-						memcpy(&sin_addr, &s->sin6_addr.s6_addr[12], sizeof (sin_addr));
+						memcpy(&sin_addr, &s->sin6_addr.s6_addr[12], sizeof(sin_addr));
 						inet_ntop(AF_INET, &sin_addr, ipStr, sizeof(ipStr));
 					}
 					else
@@ -729,6 +725,7 @@ void CVoice::HandleNetwork()
 
 				bool isLocalHost = strcmp(ipStr, LOCALHOST_IP) == 0 || strcmp(ipStr, "::1") == 0;
 				bool isWhitelisted = std::find(g_vecWhitelistedIPs.begin(), g_vecWhitelistedIPs.end(), ipStr) != g_vecWhitelistedIPs.end();
+
 				if (!isLocalHost && !isWhitelisted)
 				{
 					smutils->LogError(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);

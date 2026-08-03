@@ -728,7 +728,7 @@ void CVoice::HandleNetwork()
 
 				if (!isLocalHost && !isWhitelisted)
 				{
-					smutils->LogError(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);
+					smutils->LogMessage(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);
 					close_socket(Socket);
 					return;
 				}

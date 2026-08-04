@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <ctime>
 #include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
   #include <winsock2.h>
@@ -730,24 +731,25 @@ void CVoice::HandleNetwork()
 				{
 					smutils->LogMessage(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);
 					close_socket(Socket);
-					return;
+				}
+				else
+				{
+					m_aClients[Client].m_Socket = Socket;
+					m_aClients[Client].m_BufferWriteIndex = 0;
+					m_aClients[Client].m_LastLength = 0;
+					m_aClients[Client].m_LastValidData = 0.0;
+					m_aClients[Client].m_New = true;
+					m_aClients[Client].m_UnEven = false;
+
+					m_aPollFds[m_PollFds].fd = Socket;
+					m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
+					m_aPollFds[m_PollFds].revents = 0;
+					m_PollFds++;
+
+					if (g_SvLogging->GetInt())
+						smutils->LogMessage(myself, "Client %d connected!\n", Client);
 				}
 			}
-
-			m_aClients[Client].m_Socket = Socket;
-			m_aClients[Client].m_BufferWriteIndex = 0;
-			m_aClients[Client].m_LastLength = 0;
-			m_aClients[Client].m_LastValidData = 0.0;
-			m_aClients[Client].m_New = true;
-			m_aClients[Client].m_UnEven = false;
-
-			m_aPollFds[m_PollFds].fd = Socket;
-			m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
-			m_aPollFds[m_PollFds].revents = 0;
-			m_PollFds++;
-
-			if (g_SvLogging->GetInt())
-				smutils->LogMessage(myself, "Client %d connected!\n", Client);
 		}
 	}
 

@@ -36,6 +36,7 @@
 #include <ctime>
 #include <vector>
 #include <algorithm>
+#include <cstdlib>
 
 #ifdef _WIN32
   #include <winsock2.h>
@@ -521,6 +522,47 @@ int my_ioctl(socket_t sockfd, long cmd, size_t *argp)
 #endif
 }
 
+bool is_ip_in_cidr(const char* clientIpStr, const std::string& cidrEntry)
+{
+    struct in_addr clientAddr;
+    if (inet_pton(AF_INET, clientIpStr, &clientAddr) != 1)
+        return false;
+
+    size_t slashPos = cidrEntry.find('/');
+    std::string ipPart = (slashPos != std::string::npos) ? cidrEntry.substr(0, slashPos) : cidrEntry;
+    int prefixLen = (slashPos != std::string::npos) ? std::atoi(cidrEntry.substr(slashPos + 1).c_str()) : 32;
+
+    struct in_addr rangeAddr;
+    if (inet_pton(AF_INET, ipPart.c_str(), &rangeAddr) != 1)
+        return false;
+
+    uint32_t clientIpHost = ntohl(clientAddr.s_addr);
+    uint32_t rangeIpHost  = ntohl(rangeAddr.s_addr);
+
+    if (prefixLen <= 0)
+		return true;
+    if (prefixLen > 32)
+		prefixLen = 32;
+
+    uint32_t mask = (prefixLen == 32) ? 0xFFFFFFFF : ~(0xFFFFFFFF >> prefixLen);
+
+    return (clientIpHost & mask) == (rangeIpHost & mask);
+}
+
+bool is_ip_whitelisted(const char* clientIpStr)
+{
+	if (strcmp(clientIpStr, LOCALHOST_IP) == 0 || strcmp(clientIpStr, "::1") == 0)
+		return true;
+
+	for (const auto& entry : g_vecWhitelistedIPs)
+	{
+		if (is_ip_in_cidr(clientIpStr, entry))
+			return true;
+	}
+
+	return false;
+}
+
 void CVoice::ListenSocket()
 {
 	if(m_PollFds > 0)
@@ -724,16 +766,15 @@ void CVoice::HandleNetwork()
 					}
 				}
 
-				bool isLocalHost = strcmp(ipStr, LOCALHOST_IP) == 0 || strcmp(ipStr, "::1") == 0;
-				bool isWhitelisted = std::find(g_vecWhitelistedIPs.begin(), g_vecWhitelistedIPs.end(), ipStr) != g_vecWhitelistedIPs.end();
-
-				if (!isLocalHost && !isWhitelisted)
+				if (!is_ip_whitelisted(ipStr))
 				{
 					smutils->LogMessage(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);
 					close_socket(Socket);
 				}
 				else
 				{
+					smutils->LogMessage(myself, "Client %d connection from %s accepted.", Client, ipStr);
+
 					m_aClients[Client].m_Socket = Socket;
 					m_aClients[Client].m_BufferWriteIndex = 0;
 					m_aClients[Client].m_LastLength = 0;

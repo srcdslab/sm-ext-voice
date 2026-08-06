@@ -34,6 +34,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <ctime>
+#include <vector>
+#include <algorithm>
+#include <cstdlib>
 
 #ifdef _WIN32
   #include <winsock2.h>
@@ -82,12 +85,16 @@ ConVar *g_SvPacketSize = CreateConVar("sm_voice_packet_size", "64", FCVAR_NOTIFY
 ConVar *g_SvComplexity = CreateConVar("sm_voice_complexity", "10", FCVAR_NOTIFY, "Encoder complexity [0 - 10]", true, 0.0, true, 10.0);
 ConVar *g_SvCallOriginalBroadcast = CreateConVar("sm_voice_call_original_broadcast", "1", FCVAR_NOTIFY, "Call the original broadcast, set to 0 for debug purposes");
 ConVar *g_SvTestDataHex = CreateConVar("sm_voice_debug_celt_data", "", FCVAR_NOTIFY, "Debug only, celt data in HEX to send instead of incoming data");
+ConVar *g_SvWhitelistedIPs = CreateConVar("sm_voice_whitelisted_ips", "172.17.0.0/16", FCVAR_PROTECTED, "Whitelisted IPs (Separated by ',' empty means only localhost can connect)");
+
+std::vector<std::string> g_vecWhitelistedIPs;
+
+#define LOCALHOST_IP "127.0.0.1"
 
 /**
  * @file extension.cpp
  * @brief Implement extension code here.
  */
-
 #ifdef _WIN32
 #include <basetsd.h>
 typedef SSIZE_T ssize_t;
@@ -514,6 +521,47 @@ int my_ioctl(socket_t sockfd, long cmd, size_t *argp)
 #endif
 }
 
+bool is_ip_in_cidr(const char* clientIpStr, const std::string& cidrEntry)
+{
+    struct in_addr clientAddr;
+    if (inet_pton(AF_INET, clientIpStr, &clientAddr) != 1)
+        return false;
+
+    size_t slashPos = cidrEntry.find('/');
+    std::string ipPart = (slashPos != std::string::npos) ? cidrEntry.substr(0, slashPos) : cidrEntry;
+    int prefixLen = (slashPos != std::string::npos) ? std::atoi(cidrEntry.substr(slashPos + 1).c_str()) : 32;
+
+    struct in_addr rangeAddr;
+    if (inet_pton(AF_INET, ipPart.c_str(), &rangeAddr) != 1)
+        return false;
+
+    uint32_t clientIpHost = ntohl(clientAddr.s_addr);
+    uint32_t rangeIpHost  = ntohl(rangeAddr.s_addr);
+
+    if (prefixLen <= 0)
+		return true;
+    if (prefixLen > 32)
+		prefixLen = 32;
+
+    uint32_t mask = (prefixLen == 32) ? 0xFFFFFFFF : ~(0xFFFFFFFF >> prefixLen);
+
+    return (clientIpHost & mask) == (rangeIpHost & mask);
+}
+
+bool is_ip_whitelisted(const char* clientIpStr)
+{
+	if (strcmp(clientIpStr, LOCALHOST_IP) == 0 || strcmp(clientIpStr, "::1") == 0)
+		return true;
+
+	for (const auto& entry : g_vecWhitelistedIPs)
+	{
+		if (is_ip_in_cidr(clientIpStr, entry))
+			return true;
+	}
+
+	return false;
+}
+
 void CVoice::ListenSocket()
 {
 	if(m_PollFds > 0)
@@ -549,6 +597,39 @@ void CVoice::ListenSocket()
 	m_aPollFds[0].fd = m_ListenSocket;
 	m_aPollFds[0].events = POLLIN;
 	m_PollFds++;
+
+	// Get the whitelisted IPs from the cvar
+	const char *str = g_SvWhitelistedIPs->GetString();
+	g_vecWhitelistedIPs.clear();
+
+	while (*str != '\0')
+	{
+		while (*str == ' ')
+		{
+			str++;
+		}
+
+		if (*str == '\0')
+			break;
+
+		const char *start = str;
+		while (*str != '\0' && *str != ',')
+		{
+			str++;
+		}
+
+		const char *end = str;
+		while (end > start && *(end - 1) == ' ')
+		{
+			end--;
+		}
+
+		if (end > start)
+			g_vecWhitelistedIPs.push_back(std::string(start, end - start));
+
+		if (*str == ',')
+			str++;
+	}
 
 	smutils->AddGameFrameHook(::OnGameFrame);
 }
@@ -654,24 +735,61 @@ void CVoice::HandleNetwork()
 		// no free slot
 		if(Client != MAX_CLIENTS)
 		{
-			sockaddr_in addr;
-			socklen_t size = sizeof(sockaddr_in);
+			struct sockaddr_storage addr;
+			socklen_t size = sizeof(addr);
+
 			int Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
 
-			m_aClients[Client].m_Socket = Socket;
-			m_aClients[Client].m_BufferWriteIndex = 0;
-			m_aClients[Client].m_LastLength = 0;
-			m_aClients[Client].m_LastValidData = 0.0;
-			m_aClients[Client].m_New = true;
-			m_aClients[Client].m_UnEven = false;
+			if (Socket != -1)
+			{
+				char ipStr[INET6_ADDRSTRLEN] = {0};
 
-			m_aPollFds[m_PollFds].fd = Socket;
-			m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
-			m_aPollFds[m_PollFds].revents = 0;
-			m_PollFds++;
+				if (addr.ss_family == AF_INET)
+				{
+					struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+					inet_ntop(AF_INET, &(s->sin_addr), ipStr, sizeof(ipStr));
+				} 
+				else if (addr.ss_family == AF_INET6)
+				{
+					struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
 
-			if (g_SvLogging->GetInt())
-				smutils->LogMessage(myself, "Client %d connected!\n", Client);
+					if (IN6_IS_ADDR_V4MAPPED(&(s->sin6_addr)))
+					{
+						struct in_addr sin_addr;
+						memcpy(&sin_addr, &s->sin6_addr.s6_addr[12], sizeof(sin_addr));
+						inet_ntop(AF_INET, &sin_addr, ipStr, sizeof(ipStr));
+					}
+					else
+					{
+						inet_ntop(AF_INET6, &(s->sin6_addr), ipStr, sizeof(ipStr));
+					}
+				}
+
+				if (!is_ip_whitelisted(ipStr))
+				{
+					smutils->LogMessage(myself, "Client %d connection from %s rejected (not whitelisted).", Client, ipStr);
+					close_socket(Socket);
+				}
+				else
+				{
+					smutils->LogMessage(myself, "Client %d connection from %s accepted.", Client, ipStr);
+
+					m_aClients[Client].m_Socket = Socket;
+					m_aClients[Client].m_BufferWriteIndex = 0;
+					m_aClients[Client].m_LastLength = 0;
+					m_aClients[Client].m_LastValidData = 0.0;
+					m_aClients[Client].m_New = true;
+					m_aClients[Client].m_UnEven = false;
+
+					m_aPollFds[m_PollFds].fd = Socket;
+					m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
+					m_aPollFds[m_PollFds].revents = 0;
+					m_PollFds++;
+
+					if (g_SvLogging->GetInt())
+						smutils->LogMessage(myself, "Client %d connected!\n", Client);
+				}
+			}
 		}
 	}
 

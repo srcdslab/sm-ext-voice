@@ -85,7 +85,7 @@ ConVar *g_SvPacketSize = CreateConVar("sm_voice_packet_size", "64", FCVAR_NOTIFY
 ConVar *g_SvComplexity = CreateConVar("sm_voice_complexity", "10", FCVAR_NOTIFY, "Encoder complexity [0 - 10]", true, 0.0, true, 10.0);
 ConVar *g_SvCallOriginalBroadcast = CreateConVar("sm_voice_call_original_broadcast", "1", FCVAR_NOTIFY, "Call the original broadcast, set to 0 for debug purposes");
 ConVar *g_SvTestDataHex = CreateConVar("sm_voice_debug_celt_data", "", FCVAR_NOTIFY, "Debug only, celt data in HEX to send instead of incoming data");
-ConVar *g_SvWhitelistedIPs = CreateConVar("sm_voice_whitelisted_ips", "", FCVAR_PROTECTED, "Whitelisted IPs (Separated by ',' empty means only localhost can connect)");
+ConVar *g_SvWhitelistedIPs = CreateConVar("sm_voice_whitelisted_ips", "172.17.0.0/16", FCVAR_PROTECTED, "Whitelisted IPs (Separated by ',' empty means only localhost can connect)");
 
 std::vector<std::string> g_vecWhitelistedIPs;
 

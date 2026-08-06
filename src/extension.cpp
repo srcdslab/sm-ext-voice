@@ -95,7 +95,6 @@ std::vector<std::string> g_vecWhitelistedIPs;
  * @file extension.cpp
  * @brief Implement extension code here.
  */
-
 #ifdef _WIN32
 #include <basetsd.h>
 typedef SSIZE_T ssize_t;

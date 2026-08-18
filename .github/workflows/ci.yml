@@ -21,7 +21,7 @@ jobs:
   #     PROTOBUF_VALVE_REF: '02c5c94089d46fb14d8d94a4791e8cad7eef2d63'
   #   steps:
   #     - name: Checkout valve protobuf
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
   #       with:
   #         repository: SteamDatabase/Protobufs
   #         ref: ${{ env.PROTOBUF_VALVE_REF }}
@@ -29,7 +29,7 @@ jobs:
   #         submodules: recursive
 
   #     - name: Checkout protobuf
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
   #       with:
   #         repository: protocolbuffers/protobuf
   #         ref: ${{ env.PROTOBUF_REF }}

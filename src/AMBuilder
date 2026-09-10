@@ -45,13 +45,26 @@ for sdk_name in Extension.sdks:
     binary.compiler.cxxincludes += [
       os.path.join(Extension.ext_root, 'src', 'celt')
     ]
-    # TODO: add proper linux support for x64
-    if cxx.target.arch in ['x86'] and cxx.target.platform in ['linux']:
-      binary.compiler.linkflags += [
-        os.path.join(Extension.ext_root, 'src', 'celt', 'libcelt0.a')
-      ]
-    # TODO: add proper windows support for celt
-    if cxx.target.platform in ['windows']:
-      binary.compiler.linkflags += ['/FORCE:UNRESOLVED']
+
+    celt_dir = os.path.join(Extension.ext_root, 'src', 'celt')
+
+    # TODO: add proper linux/windows support for x64
+    if cxx.target.arch in ['x86']:
+      if cxx.target.platform in ['linux']:
+        binary.compiler.linkflags += [
+          os.path.join(celt_dir, 'libcelt0.a')
+        ]
+
+      elif cxx.target.platform in ['windows']:
+        binary.compiler.defines += [
+          'HAVE_CONFIG_H',
+          'CUSTOM_MODES',
+          '_CRT_SECURE_NO_WARNINGS',
+        ]
+
+        binary.compiler.linkflags += [
+          os.path.join(celt_dir, 'celt32.lib'),
+          'ws2_32.lib'
+        ]
 
 Extension.extensions += builder.Add(project)

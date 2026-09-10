@@ -47,24 +47,26 @@ for sdk_name in Extension.sdks:
     ]
 
     celt_dir = os.path.join(Extension.ext_root, 'src', 'celt')
+    is_64bit = cxx.target.arch in ['x86_64', 'x64', 'amd64']
 
-    # TODO: add proper linux/windows support for x64
-    if cxx.target.arch in ['x86']:
-      if cxx.target.platform in ['linux']:
-        binary.compiler.linkflags += [
-          os.path.join(celt_dir, 'libcelt0.a')
-        ]
+    if cxx.target.platform in ['linux']:
+      celt_lib = 'libcelt64.a' if is_64bit else 'libcelt32.a'
+      binary.compiler.linkflags += [
+        os.path.join(celt_dir, celt_lib)
+      ]
 
-      elif cxx.target.platform in ['windows']:
-        binary.compiler.defines += [
-          'HAVE_CONFIG_H',
-          'CUSTOM_MODES',
-          '_CRT_SECURE_NO_WARNINGS',
-        ]
+    if cxx.target.platform in ['windows']:
+      binary.compiler.defines += [
+        'HAVE_CONFIG_H',
+        'CUSTOM_MODES',
+        '_CRT_SECURE_NO_WARNINGS',
+      ]
 
-        binary.compiler.linkflags += [
-          os.path.join(celt_dir, 'celt32.lib'),
-          'ws2_32.lib'
-        ]
+      celt_lib = 'celt64.lib' if is_64bit else 'celt32.lib'
+      binary.compiler.linkflags += [
+        os.path.join(celt_dir, celt_lib),
+        'ws2_32.lib'
+      ]
+
 
 Extension.extensions += builder.Add(project)

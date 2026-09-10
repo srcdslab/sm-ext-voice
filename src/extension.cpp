@@ -1099,17 +1099,7 @@ void CVoice::BroadcastVoiceData(IClient *pClient, size_t nBytes, unsigned char *
 			DETOUR_STATIC_CALL(SV_BroadcastVoiceData_CSGO)(pClient, msg, drop);
 	#endif
 #else
-	#ifdef _WIN32
-		#ifndef WIN64
-		__asm mov ecx, pClient;
-		__asm mov edx, nBytes;
-		#endif
-
-		if (g_SvCallOriginalBroadcast->GetInt())
-			DETOUR_STATIC_CALL(SV_BroadcastVoiceData_LTCG)((char *)pData, 0);
-	#else
 		if (g_SvCallOriginalBroadcast->GetInt())
 			DETOUR_STATIC_CALL(SV_BroadcastVoiceData)(pClient, nBytes, (char *)pData, 0);
-	#endif
 #endif
 }

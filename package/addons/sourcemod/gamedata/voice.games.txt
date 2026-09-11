@@ -8,7 +8,9 @@
 			{
 				"library"		"engine"
 				"windows"		"\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\xEC\x50\x83\x78\x30"
+				"windows64"		"\x48\x89\x5C\x24\x18\x56\x57\x41\x56\x48\x81\xEC\x90\x00\x00\x00"
 				"linux"			"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
+				"linux64"		"@_Z21SV_BroadcastVoiceDataP7IClientiPcx"
 			}
 		}
 	}

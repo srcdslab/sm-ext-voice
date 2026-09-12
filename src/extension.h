@@ -58,6 +58,12 @@
 #define MAX_CLIENTS 16
 
 #ifdef _WIN32
+typedef SOCKET socket_t;
+#else
+typedef int socket_t;
+#endif
+
+#ifdef _WIN32
 typedef __int64		int64;
 #else
 typedef long long	int64;
@@ -154,11 +160,11 @@ public:
   void ListenSocket();
 
 private:
-  int m_ListenSocket;
+  socket_t m_ListenSocket;
 
   struct CClient
   {
-    int m_Socket;
+    socket_t m_Socket;
     size_t m_BufferWriteIndex;
     size_t m_LastLength;
     double m_LastValidData;

@@ -42,6 +42,7 @@
   #include <winsock2.h>
   #include <ws2tcpip.h>
   typedef SOCKET socket_t;
+  #define INVALID_SOCKET_T INVALID_SOCKET
 #else
   #include <sys/types.h>
   #include <sys/socket.h>
@@ -50,6 +51,7 @@
   #include <sys/ioctl.h>
   #include <poll.h>
   typedef int socket_t;
+  #define INVALID_SOCKET_T -1
 #endif
 
 #include <iclient.h>
@@ -272,14 +274,14 @@ void OnGameFrame(bool simulating)
 
 CVoice::CVoice()
 {
-	m_ListenSocket = -1;
+	m_ListenSocket = INVALID_SOCKET_T;
 
 	m_PollFds = 0;
 	for(int i = 1; i < 1 + MAX_CLIENTS; i++)
 		m_aPollFds[i].fd = -1;
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
-		m_aClients[i].m_Socket = -1;
+		m_aClients[i].m_Socket = INVALID_SOCKET_T;
 
 	m_AvailableTime = 0.0;
 
@@ -463,7 +465,7 @@ void CVoice::SDK_OnAllLoaded()
 
 	// Init tcp server
 	m_ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(m_ListenSocket < 0)
+	if(m_ListenSocket == INVALID_SOCKET_T)
 	{
 		smutils->LogError(myself, "Failed creating socket.");
 		SDK_OnUnload();
@@ -492,7 +494,7 @@ bool convert_ip(const char *ip, struct in_addr *addr)
 #endif
 }
 
-void close_socket(int sock)
+void close_socket(socket_t sock)
 {
 #ifdef _WIN32
     closesocket(sock);
@@ -504,8 +506,6 @@ void close_socket(int sock)
 int my_poll(struct pollfd *fds, int nfds, int timeout)
 {
 #ifdef _WIN32
-	// Define nfds_t on Windows if needed
-	typedef int nfds_t;
 	return WSAPoll(fds, nfds, timeout);
 #else
 	return poll(fds, nfds, timeout);
@@ -515,9 +515,12 @@ int my_poll(struct pollfd *fds, int nfds, int timeout)
 int my_ioctl(socket_t sockfd, long cmd, size_t *argp)
 {
 #ifdef _WIN32
-    return ioctlsocket(sockfd, cmd, reinterpret_cast<u_long*>(argp)); // Windows version
+    u_long avail = 0;
+    int ret = ioctlsocket(sockfd, cmd, &avail);
+    *argp = avail;
+    return ret;
 #else
-    return ioctl(sockfd, cmd, argp);        // Linux/macOS version
+    return ioctl(sockfd, cmd, argp);
 #endif
 }
 
@@ -644,18 +647,18 @@ void CVoice::SDK_OnUnload()
 		m_VoiceDetour = NULL;
 	}
 
-	if(m_ListenSocket != -1)
+	if(m_ListenSocket != INVALID_SOCKET_T)
 	{
 		close_socket(m_ListenSocket);
-		m_ListenSocket = -1;
+		m_ListenSocket = INVALID_SOCKET_T;
 	}
 
 	for (int Client = 0; Client < MAX_CLIENTS; Client++)
 	{
-		if(m_aClients[Client].m_Socket != -1)
+		if(m_aClients[Client].m_Socket != INVALID_SOCKET_T)
 		{
 			close_socket(m_aClients[Client].m_Socket);
-			m_aClients[Client].m_Socket = -1;
+			m_aClients[Client].m_Socket = INVALID_SOCKET_T;
 		}
 	}
 
@@ -714,7 +717,7 @@ bool CVoice::OnBroadcastVoiceData(IClient *pClient, size_t nBytes, char *data)
 
 void CVoice::HandleNetwork()
 {
-	if(m_ListenSocket == -1)
+	if(m_ListenSocket == INVALID_SOCKET_T)
 		return;
 
 	int PollRes = my_poll(m_aPollFds, m_PollFds, 0);
@@ -728,7 +731,7 @@ void CVoice::HandleNetwork()
 		int Client;
 		for(Client = 0; Client < MAX_CLIENTS; Client++)
 		{
-			if(m_aClients[Client].m_Socket == -1)
+			if(m_aClients[Client].m_Socket == INVALID_SOCKET_T)
 				break;
 		}
 
@@ -738,9 +741,9 @@ void CVoice::HandleNetwork()
 			struct sockaddr_storage addr;
 			socklen_t size = sizeof(addr);
 
-			int Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
+			socket_t Socket = accept(m_ListenSocket, (sockaddr *)&addr, &size);
 
-			if (Socket != -1)
+			if (Socket != INVALID_SOCKET_T)
 			{
 				char ipStr[INET6_ADDRSTRLEN] = {0};
 
@@ -782,7 +785,7 @@ void CVoice::HandleNetwork()
 					m_aClients[Client].m_UnEven = false;
 
 					m_aPollFds[m_PollFds].fd = Socket;
-					m_aPollFds[m_PollFds].events = POLLIN | POLLHUP;
+					m_aPollFds[m_PollFds].events = POLLIN;
 					m_aPollFds[m_PollFds].revents = 0;
 					m_PollFds++;
 
@@ -811,10 +814,10 @@ void CVoice::HandleNetwork()
 		// Make sure to set SO_LINGER l_onoff = 1, l_linger = 0
 		if(m_aPollFds[PollFds].revents & POLLHUP)
 		{
-			if (pClient->m_Socket != -1)
+			if (pClient->m_Socket != INVALID_SOCKET_T)
 				close_socket(pClient->m_Socket);
 
-			pClient->m_Socket = -1;
+			pClient->m_Socket = INVALID_SOCKET_T;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
 			if (g_SvLogging->GetInt())
@@ -853,13 +856,12 @@ void CVoice::HandleNetwork()
 		}
 
 		ssize_t Bytes = recv(pClient->m_Socket, &aBuf[Shift], sizeof(aBuf) - Shift, 0);
-
 		if(Bytes <= 0)
 		{
-			if (pClient->m_Socket != -1)
+			if (pClient->m_Socket != INVALID_SOCKET_T)
 				close_socket(pClient->m_Socket);
 
-			pClient->m_Socket = -1;
+			pClient->m_Socket = INVALID_SOCKET_T;
 			m_aPollFds[PollFds].fd = -1;
 			CompressPollFds = true;
 			if (g_SvLogging->GetInt())
@@ -1017,7 +1019,7 @@ void CVoice::HandleVoiceData()
 		for(int Client = 0; Client < MAX_CLIENTS; Client++)
 		{
 			CClient *pClient = &m_aClients[Client];
-			if(pClient->m_Socket == -1 || pClient->m_New == true)
+			if(pClient->m_Socket == INVALID_SOCKET_T || pClient->m_New == true)
 				continue;
 
 			m_Buffer.SetWriteIndex(pClient->m_BufferWriteIndex);

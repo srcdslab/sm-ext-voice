@@ -107,7 +107,9 @@ template <typename T> inline T min_ext(T a, T b) { return a<b?a:b; }
 CVoice g_Interface;
 SMEXT_LINK(&g_Interface);
 
-ITimer *g_pTimerSpeaking[MAX_CLIENTS];
+// Indexed by client index (player slot + 1), like g_aFrameVoiceBytes and g_fLastVoiceData.
+// MAX_CLIENTS is the number of TCP voice clients, not players.
+ITimer *g_pTimerSpeaking[SM_MAXPLAYERS + 1];
 
 CGlobalVars *gpGlobals = NULL;
 ISDKTools *g_pSDKTools = NULL;
@@ -641,6 +643,14 @@ void CVoice::SDK_OnUnload()
 {
 	smutils->RemoveGameFrameHook(::OnGameFrame);
 
+	// The timer callbacks live in this library: kill them before it is unloaded.
+	// KillTimer runs OnTimerEnd, which clears the slot.
+	for (int i = 0; i <= SM_MAXPLAYERS; i++)
+	{
+		if (g_pTimerSpeaking[i])
+			timersys->KillTimer(g_pTimerSpeaking[i]);
+	}
+
 	if (m_VoiceDetour)
 	{
 		m_VoiceDetour->Destroy();
@@ -691,6 +701,8 @@ bool CVoice::OnBroadcastVoiceData(IClient *pClient, size_t nBytes, char *data)
 		return false;
 
 	int client = pClient->GetPlayerSlot() + 1;
+	if(client < 1 || client > SM_MAXPLAYERS)
+		return false;
 
 	// Reject voice packet if we'd send more than NET_MAX_VOICE_BYTES_FRAME voice bytes from this client in the current frame.
 	// 5 = SVC_VoiceData header/overhead
